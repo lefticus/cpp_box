@@ -395,10 +395,10 @@ template<std::size_t RAM_Size = 1024> struct System
     // we'll be at the end of RAM
     registers[14] = RAM_Size - 4;
 
-    PC() = loc;
+    PC() = loc + 4;
     while (PC() != RAM_Size - 4) {
       tracer(*this);
-      process(get_instruction(PC()));
+      process(get_instruction(PC() - 4));
     }
   }
 
@@ -683,7 +683,7 @@ template<std::size_t RAM_Size = 1024> struct System
   constexpr void process(const Instruction instruction) noexcept
   {
     // account for prefetch
-    PC() += 8;
+    PC() += 4;
     if (check_condition(instruction)) {
       switch (decode(instruction)) {
       case Instruction_Type::Data_Processing: data_processing(instruction); break;
@@ -705,7 +705,7 @@ template<std::size_t RAM_Size = 1024> struct System
     }
 
     // discount prefetch
-    PC() -= 4;
+    //PC() -= 4;
   }
 };  // namespace ARM_Thing
 

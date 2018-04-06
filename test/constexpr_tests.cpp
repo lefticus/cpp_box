@@ -12,6 +12,7 @@ template<bool B> bool static_test()
 template<typename... T> constexpr auto run_instruction(T... instruction)
 {
   ARM_Thing::System system{};
+  system.PC() = 4;
   (system.process(instruction), ...);
   return system;
 }
@@ -27,14 +28,14 @@ template<std::size_t N> constexpr auto run_code(std::uint32_t start, std::array<
 TEST_CASE("test always executing jump")
 {
   constexpr auto systest2 = run_instruction(ARM_Thing::Instruction{ 0b1110'1010'0000'0000'0000'0000'0000'1111 });
-  REQUIRE(static_test<systest2.PC() == 68>());
+  REQUIRE(static_test<systest2.PC() == 72>());
   REQUIRE(static_test<systest2.registers[14] == 0>());
 }
 
 TEST_CASE("test always executing jump with saved return")
 {
   constexpr auto systest3 = run_instruction(ARM_Thing::Instruction{ 0b1110'1011'0000'0000'0000'0000'0000'1111 });
-  REQUIRE(static_test<systest3.PC() == 68>());
+  REQUIRE(static_test<systest3.PC() == 72>());
   REQUIRE(static_test<systest3.registers[14] == 4>());
 }
 
