@@ -17,7 +17,14 @@ if(CMAKE_COMPILER_IS_GNUCC)
   option(ENABLE_COVERAGE "Enable coverage reporting for gcc/clang" FALSE)
 
   if(ENABLE_COVERAGE)
-    target_compile_options(--coverage -O0)
+    target_compile_options(project_options --coverage -O0)
+  endif()
+
+  option(ENABLE_ASAN "Enable address sanitizer" FALSE)
+
+  if(ENABLE_ASAN)
+    target_compile_options(project_options INTERFACE -fsanitize=address)
+    target_link_libraries(project_options INTERFACE -fsanitize=address)
   endif()
 endif()
 
@@ -63,6 +70,9 @@ enable_testing()
 add_executable(constexpr_tests test/constexpr_tests.cpp)
 target_link_libraries(constexpr_tests PRIVATE project_options project_warnings)
 catch_discover_tests(constexpr_tests)
+
+add_executable(arm_emu src/main.cpp)
+target_link_libraries(arm_emu PRIVATE project_options project_warnings)
 
 
 # imgui example

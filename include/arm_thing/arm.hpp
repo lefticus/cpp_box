@@ -2,9 +2,8 @@
 #include <tuple>
 #include <algorithm>
 #include <iterator>
-#include <cassert>
-#include <iostream>
 
+namespace ARM_Thing {
 template<typename Value, typename Bit>[[nodiscard]] constexpr bool test_bit(const Value val, const Bit bit) noexcept
 {
   return val & (static_cast<Value>(1) << bit);
@@ -14,7 +13,7 @@ template<typename Type, typename CRTP> struct Strongly_Typed
 {
   [[nodiscard]] constexpr auto data() const noexcept { return m_val; }
   [[nodiscard]] constexpr auto operator&(const Type rhs) const noexcept { return m_val & rhs; }
-  [[nodiscard]] constexpr bool test_bit(const Type bit) const noexcept { return ::test_bit(m_val, bit); }
+  [[nodiscard]] constexpr bool test_bit(const Type bit) const noexcept { return ARM_Thing::test_bit(m_val, bit); }
 
   [[nodiscard]] friend constexpr auto operator&(const Type lhs, const CRTP rhs) noexcept { return lhs & rhs.m_val; }
 
@@ -229,49 +228,176 @@ enum class Instruction_Type {
 }
 
 
-template<std::size_t RAMSize = 1024> struct System
+template<std::size_t RAM_Size = 1024> struct System
 {
   std::uint32_t CSPR{};
 
   std::array<std::uint32_t, 16> registers{};
-  std::array<std::uint8_t, RAMSize> RAM{};
 
   [[nodiscard]] constexpr auto &PC() noexcept { return registers[15]; }
   [[nodiscard]] constexpr const auto &PC() const noexcept { return registers[15]; }
 
-  System() = default;
-
-  template<std::size_t Size> constexpr System(const std::array<std::uint8_t, Size> &memory) noexcept
+  struct ROM_Block
   {
-    static_assert(Size <= RAMSize);
+    bool in_use{ false };
+    std::uint8_t const *data{ nullptr };
+    std::uint32_t start{ 0 };
+    std::uint32_t end{ 0 };
+  };
 
-    // Workaround for missing constexpr copy (added in C++20, not in compilers yet)
-    for (std::size_t loc = 0; loc < Size; ++loc) {
-      RAM[loc] = memory[loc];
+  struct RAM_Block
+  {
+    bool in_use{ false };
+    std::uint8_t *data{ nullptr };
+    std::uint32_t start{ 0 };
+    std::uint32_t end{ 0 };
+  };
+
+  std::array<std::uint8_t, RAM_Size> builtin_ram{};
+  std::array<RAM_Block, 16> ram_map;
+  std::array<ROM_Block, 16> rom_map;
+
+  void invalid_memory_byte_write([[maybe_unused]] const std::uint32_t loc) const { std::terminate(); }
+  void invalid_memory_word_write([[maybe_unused]] const std::uint32_t loc) const { std::terminate(); }
+
+  std::uint8_t invalid_memory_byte_read([[maybe_unused]] const std::uint32_t loc) const { std::terminate(); }
+  std::uint32_t invalid_memory_word_read([[maybe_unused]] const std::uint32_t loc) const { std::terminate(); }
+
+  constexpr void unhandled_instruction([[maybe_unused]] const std::string_view description, [[maybe_unused]] const Instruction ins)
+  {
+    std::terminate();
+  }
+
+  template<typename Container> constexpr void set(Container &cont, const std::uint32_t start, const std::size_t ram_slot)
+  {
+    /// \todo check assumption that start + size <= std::integer_limits<std::uint32_t>::max
+    ram_map[ram_slot] = { true, cont.data(), start, static_cast<std::uint32_t>(start + cont.size() - 1) };
+  }
+
+  template<typename Container> constexpr void set(const Container &cont, const std::uint32_t start, const std::size_t rom_slot)
+  {
+    /// \todo check assumption that start + size <= std::integer_limits<std::uint32_t>::max
+    rom_map[rom_slot] = { true, cont.data(), start, static_cast<std::uint32_t>(start + cont.size() - 1) };
+  }
+
+
+  constexpr std::uint8_t read_byte(const std::uint32_t loc) const noexcept
+  {
+    for (auto &block : ram_map) {
+      if (block.in_use && loc >= block.start && loc <= block.end) {
+        return *(block.data + (loc - block.start));
+      }
+    }
+    for (auto &block : rom_map) {
+      if (block.in_use && loc >= block.start && loc <= block.end) {
+        return *(block.data + (loc - block.start));
+      }
+    }
+    if (loc < RAM_Size) {
+      return builtin_ram[loc];
+    }
+
+    return invalid_memory_byte_read(loc);
+  }
+
+  constexpr void write_byte(const std::uint32_t loc, const std::uint8_t value) noexcept
+  {
+    for (auto &block : ram_map) {
+      if (block.in_use && loc >= block.start && loc <= block.end) {
+        block.data[loc - block.start] = value;
+        return;
+      }
+    }
+    if (loc < RAM_Size) {
+      builtin_ram[loc] = value;
+      return;
+    }
+
+    invalid_memory_byte_write(loc);
+  }
+
+  constexpr std::uint32_t read_word(const std::uint32_t loc) const noexcept
+  {
+    const std::uint8_t *data = [&]() -> const std::uint8_t * {
+      for (const auto &block : ram_map) {
+        if (block.in_use && loc >= block.start && loc + 3 <= block.end) {
+          return block.data + (loc - block.start);
+        }
+      }
+      for (const auto &block : rom_map) {
+        if (block.in_use && loc >= block.start && loc + 3 <= block.end) {
+          return block.data + (loc - block.start);
+        }
+      }
+      if (loc + 3 < RAM_Size) {
+        return &builtin_ram[loc];
+      }
+      return nullptr;
+    }();
+
+    if (data) {
+      // Note: there are more efficient ways to do this with reinterpret_cast
+      // or an intrinsic, but I cannot with constexpr context and I see
+      // no compiler that can optimize around this implementation
+      const std::uint32_t byte_1 = data[0];
+      const std::uint32_t byte_2 = data[1];
+      const std::uint32_t byte_3 = data[2];
+      const std::uint32_t byte_4 = data[3];
+
+      return byte_1 | (byte_2 << 8) | (byte_3 << 16) | (byte_4 << 24);
+    } else {
+      return invalid_memory_word_read(loc);
     }
   }
 
-  constexpr Instruction get_instruction(const std::uint32_t PC) noexcept
+  constexpr void write_word(const std::uint32_t loc, const std::uint32_t value) noexcept
   {
-    // Note: there are more efficient ways to do this with reinterepet_cast
-    // or an intrinsic, but I cannot with constexpr context and I see
-    // no compiler that can optimize around this implementation
-    const std::uint32_t byte_1 = RAM[PC];
-    const std::uint32_t byte_2 = RAM[PC + 1];
-    const std::uint32_t byte_3 = RAM[PC + 2];
-    const std::uint32_t byte_4 = RAM[PC + 3];
+    auto *data = [&]() -> std::uint8_t * {
+      for (auto &block : ram_map) {
+        if (block.in_use && loc >= block.start && loc + 3 <= block.end) {
+          return block.data + (loc - block.start);
+        }
+      }
+      if (loc + 3 <= RAM_Size) {
+        return &builtin_ram[loc];
+      }
+      return nullptr;
+    }();
 
-    return Instruction{ byte_1 | (byte_2 << 8) | (byte_3 << 16) | (byte_4 << 24) };
+    if (data) {
+      data[0] = value & 0xFF;
+      data[1] = (value >> 8) & 0xFF;
+      data[2] = (value >> 16) & 0xFF;
+      data[3] = (value >> 24) & 0xFF;
+    } else {
+      invalid_memory_word_write(loc);
+    }
   }
 
-  constexpr void run(const std::uint32_t loc) noexcept
+
+  constexpr System() = default;
+
+  template<std::size_t Size> constexpr System(const std::array<std::uint8_t, Size> &memory) noexcept
+  {
+    static_assert(Size <= RAM_Size);
+
+    for (std::size_t loc = 0; loc < Size; ++loc) {
+      // cast is safe - we verified this statically assigned RAM was the right size
+      write_byte(static_cast<std::uint32_t>(loc), memory[loc]);
+    }
+  }
+
+  constexpr Instruction get_instruction(const std::uint32_t PC) noexcept { return Instruction{ read_word(PC) }; }
+
+  template<typename Tracer = void (*)(const System &)> constexpr void run(const std::uint32_t loc, Tracer &&tracer = [](const System &) {}) noexcept
   {
     // Set return from call register, so when 'main' returns,
     // we'll be at the end of RAM
-    registers[14] = RAMSize;
+    registers[14] = RAM_Size - 4;
 
     PC() = loc;
-    while (PC() < RAMSize) {
+    while (PC() != RAM_Size - 4) {
+      tracer(*this);
       process(get_instruction(PC()));
     }
   }
@@ -358,21 +484,16 @@ template<std::size_t RAMSize = 1024> struct System
 
     if (val.byte_transfer()) {
       if (const auto location = pre_indexed ? indexed_location : base_location; val.load()) {
-        registers[src_dest_register] = RAM[location];
+        registers[src_dest_register] = read_byte(location);
       } else {
-        RAM[location] = static_cast<std::uint8_t>(registers[src_dest_register] & 0xFF);
+        write_byte(location, static_cast<std::uint8_t>(registers[src_dest_register] & 0xFF));
       }
     } else {
       // word transfer
       if (const auto location = pre_indexed ? indexed_location : base_location; val.load()) {
-        registers[src_dest_register] = static_cast<std::uint32_t>(RAM[location]) | (static_cast<std::uint32_t>(RAM[location + 1]) << 8)
-                                       | (static_cast<std::uint32_t>(RAM[location + 2]) << 16)
-                                       | (static_cast<std::uint32_t>(RAM[location + 3]) << 24);
+        registers[src_dest_register] = read_word(location);
       } else {
-        RAM[location]     = registers[src_dest_register] & 0xFF;
-        RAM[location + 1] = (registers[src_dest_register] >> 8) & 0xFF;
-        RAM[location + 2] = (registers[src_dest_register] >> 16) & 0xFF;
-        RAM[location + 3] = (registers[src_dest_register] >> 24) & 0xFF;
+        write_word(location, registers[src_dest_register]);
       }
     }
 
@@ -388,7 +509,7 @@ template<std::size_t RAMSize = 1024> struct System
     const auto destination_register       = val.destination_register();
     auto &destination                     = registers[destination_register];
 
-    const auto update_logical_flags = [ =, &destination, carry_out = carry_out, second_operand = second_operand ](const bool write, const auto result)
+    const auto update_logical_flags = [ =, &destination, carry_out = carry_out ](const bool write, const auto result)
     {
       if (val.set_condition_code() && destination_register != 15) {
         c_flag(carry_out);
@@ -566,23 +687,27 @@ template<std::size_t RAMSize = 1024> struct System
     if (check_condition(instruction)) {
       switch (decode(instruction)) {
       case Instruction_Type::Data_Processing: data_processing(instruction); break;
-      case Instruction_Type::MRS: assert(!"MRS Not Implemented"); break;
-      case Instruction_Type::MSR: assert(!"MSR Not Implemented"); break;
-      case Instruction_Type::MSRF: assert(!"MSR flags Not Implemented"); break;
-      case Instruction_Type::Multiply: assert(!"Multiply Not Implemented"); break;
+      case Instruction_Type::MRS: unhandled_instruction("MRS", instruction); break;
+      case Instruction_Type::MSR: unhandled_instruction("MSR", instruction); break;
+      case Instruction_Type::MSRF: unhandled_instruction("MSR flags", instruction); break;
+      case Instruction_Type::Multiply: unhandled_instruction("Multiply", instruction); break;
       case Instruction_Type::Multiply_Long: multiply_long(instruction); break;
-      case Instruction_Type::Single_Data_Swap: assert(!"Single_Data_Swap Not Implemented"); break;
+      case Instruction_Type::Single_Data_Swap: unhandled_instruction("Single_Data_Swap", instruction); break;
       case Instruction_Type::Single_Data_Transfer: single_data_transfer(instruction); break;
-      case Instruction_Type::Undefined: assert(!"Undefined Opcode"); break;
-      case Instruction_Type::Block_Data_Transfer: assert(!"Block_Data_Transfer Not Implemented"); break;
+      case Instruction_Type::Undefined: unhandled_instruction("Undefined", instruction); break;
+      case Instruction_Type::Block_Data_Transfer: unhandled_instruction("Block_Data_Transfer", instruction); break;
       case Instruction_Type::Branch: branch(instruction); break;
-      case Instruction_Type::Coprocessor_Data_Transfer: assert(!"Coprocessor_Data_Transfer Not Implemented"); break;
-      case Instruction_Type::Coprocessor_Data_Operation: assert(!"Coprocessor_Data_Operation Not Implemented"); break;
-      case Instruction_Type::Coprocessor_Register_Transfer: assert(!"Coprocessor_Register_Transfer Not Implemented"); break;
-      case Instruction_Type::Software_Interrupt: assert(!"Software_Interrupt Not Implemented"); break;
+      case Instruction_Type::Coprocessor_Data_Transfer: unhandled_instruction("Coprocessor_Data_Transfer", instruction); break;
+      case Instruction_Type::Coprocessor_Data_Operation: unhandled_instruction("Coprocessor_Data_Operation", instruction); break;
+      case Instruction_Type::Coprocessor_Register_Transfer: unhandled_instruction("Coprocessor_Register_Transfer", instruction); break;
+      case Instruction_Type::Software_Interrupt: unhandled_instruction("Software_Interrupt", instruction); break;
       }
     }
+
     // discount prefetch
     PC() -= 4;
   }
-};
+};  // namespace ARM_Thing
+
+
+}  // namespace ARM_Thing
