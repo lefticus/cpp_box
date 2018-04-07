@@ -373,7 +373,8 @@ template<std::size_t RAM_Size = 1024> struct System
 
   constexpr Instruction get_instruction(const std::uint32_t PC) noexcept { return Instruction{ read_word(PC) }; }
 
-  template<typename Tracer = void (*)(const System &)> constexpr void run(const std::uint32_t loc, Tracer &&tracer = [](const System &) {}) noexcept
+  template<typename Tracer = void (*)(const System &, std::uint32_t, Instruction)>
+  constexpr void run(const std::uint32_t loc, Tracer &&tracer = [](const System &, const auto, const auto) {}) noexcept
   {
     struct I_Cache
     {
