@@ -11,7 +11,7 @@ add_library(project_warnings INTERFACE)
 add_library(project_options INTERFACE)
 
 target_compile_features(project_options INTERFACE cxx_std_17)
-target_include_directories(project_options INTERFACE include)
+target_include_directories(project_options INTERFACE include external)
 
 if(CMAKE_COMPILER_IS_GNUCC)
   option(ENABLE_COVERAGE "Enable coverage reporting for gcc/clang" FALSE)
