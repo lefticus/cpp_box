@@ -133,9 +133,7 @@ struct Data_Processing : Strongly_Typed<std::uint32_t, Data_Processing>
     const auto shift_right = (op_2 >> 8) * 2;
 
     // Avoiding UB for shifts >= size
-    if (shift_right == 0 || shift_right == 32) {
-      return static_cast<std::uint32_t>(sign_extended_value);
-    }
+    if (shift_right == 0 || shift_right == 32) { return static_cast<std::uint32_t>(sign_extended_value); }
 
     // Should create a ROR on any modern compiler.
     // no branching, CMOV on GCC
@@ -261,7 +259,7 @@ template<std::size_t RAM_Size = 1024> struct System
   void invalid_memory_word_write([[maybe_unused]] const std::uint32_t loc) const { std::terminate(); }
 
   std::uint8_t invalid_memory_byte_read([[maybe_unused]] const std::uint32_t loc) const { std::terminate(); }
-  std::uint32_t invalid_memory_word_read([[maybe_unused]] const std::uint32_t loc) const { std::terminate(); }
+  static std::uint32_t invalid_memory_word_read([[maybe_unused]] const std::uint32_t loc) { std::terminate(); }
 
   constexpr void unhandled_instruction([[maybe_unused]] const std::string_view description, [[maybe_unused]] const Instruction ins)
   {
@@ -284,18 +282,12 @@ template<std::size_t RAM_Size = 1024> struct System
   constexpr std::uint8_t read_byte(const std::uint32_t loc) const noexcept
   {
     for (auto &block : ram_map) {
-      if (block.in_use && loc >= block.start && loc <= block.end) {
-        return *(block.data + (loc - block.start));
-      }
+      if (block.in_use && loc >= block.start && loc <= block.end) { return *(block.data + (loc - block.start)); }
     }
     for (auto &block : rom_map) {
-      if (block.in_use && loc >= block.start && loc <= block.end) {
-        return *(block.data + (loc - block.start));
-      }
+      if (block.in_use && loc >= block.start && loc <= block.end) { return *(block.data + (loc - block.start)); }
     }
-    if (loc < RAM_Size) {
-      return builtin_ram[loc];
-    }
+    if (loc < RAM_Size) { return builtin_ram[loc]; }
 
     return invalid_memory_byte_read(loc);
   }
@@ -316,22 +308,18 @@ template<std::size_t RAM_Size = 1024> struct System
     invalid_memory_byte_write(loc);
   }
 
-  constexpr std::uint32_t read_word(const std::uint32_t loc) const noexcept
+  constexpr std::uint32_t read_word(const std::uint32_t loc) const noexcept { return read_word(loc, invalid_memory_word_read); }
+
+  template<typename Error_Handler> constexpr std::uint32_t read_word(const std::uint32_t loc, Error_Handler &&error_handler) const noexcept
   {
     const std::uint8_t *data = [&]() -> const std::uint8_t * {
       for (const auto &block : ram_map) {
-        if (block.in_use && loc >= block.start && loc + 3 <= block.end) {
-          return block.data + (loc - block.start);
-        }
+        if (block.in_use && loc >= block.start && loc + 3 <= block.end) { return block.data + (loc - block.start); }
       }
       for (const auto &block : rom_map) {
-        if (block.in_use && loc >= block.start && loc + 3 <= block.end) {
-          return block.data + (loc - block.start);
-        }
+        if (block.in_use && loc >= block.start && loc + 3 <= block.end) { return block.data + (loc - block.start); }
       }
-      if (loc + 3 < RAM_Size) {
-        return &builtin_ram[loc];
-      }
+      if (loc + 3 < RAM_Size) { return &builtin_ram[loc]; }
       return nullptr;
     }();
 
@@ -346,7 +334,7 @@ template<std::size_t RAM_Size = 1024> struct System
 
       return byte_1 | (byte_2 << 8) | (byte_3 << 16) | (byte_4 << 24);
     } else {
-      return invalid_memory_word_read(loc);
+      return error_handler(loc);
     }
   }
 
@@ -354,13 +342,9 @@ template<std::size_t RAM_Size = 1024> struct System
   {
     auto *data = [&]() -> std::uint8_t * {
       for (auto &block : ram_map) {
-        if (block.in_use && loc >= block.start && loc + 3 <= block.end) {
-          return block.data + (loc - block.start);
-        }
+        if (block.in_use && loc >= block.start && loc + 3 <= block.end) { return block.data + (loc - block.start); }
       }
-      if (loc + 3 <= RAM_Size) {
-        return &builtin_ram[loc];
-      }
+      if (loc + 3 <= RAM_Size) { return &builtin_ram[loc]; }
       return nullptr;
     }();
 
@@ -391,14 +375,54 @@ template<std::size_t RAM_Size = 1024> struct System
 
   template<typename Tracer = void (*)(const System &)> constexpr void run(const std::uint32_t loc, Tracer &&tracer = [](const System &) {}) noexcept
   {
+    struct I_Cache
+    {
+      struct Cache_Elem
+      {
+        Instruction instruction{ 0 };
+        Instruction_Type type{};
+      };
+
+      constexpr I_Cache(const System &sys, const std::uint32_t t_start) noexcept : start(t_start), m_system(sys) { fill_cache(); }
+
+      constexpr Cache_Elem fetch(const std::uint32_t loc) noexcept
+      {
+        if (loc > start + (cache.size() * 4)) {
+          start = loc;
+          fill_cache();
+        }
+
+        return cache[(loc - start) / 4];
+      }
+
+      constexpr void fill_cache() noexcept
+      {
+        auto loc = start;
+        for (auto &elem : cache) {
+          elem.instruction = Instruction{ m_system.read_word(loc, [](const auto) -> std::uint32_t { return 0; }) };
+          elem.type        = m_system.decode(elem.instruction);
+          loc += 4;
+        }
+      }
+
+    private:
+      std::uint32_t start{ 0 };
+
+      std::array<Cache_Elem, 1024> cache;
+      const System &m_system;
+    };
+
+    I_Cache i_cache{ *this, loc };
+
     // Set return from call register, so when 'main' returns,
-    // we'll be at the end of RAM
+    // we'll be at the end of local RAM
     registers[14] = RAM_Size - 4;
 
     PC() = loc + 4;
     while (PC() != RAM_Size - 4) {
-      tracer(*this);
-      process(get_instruction(PC() - 4));
+      const auto [ins, type] = i_cache.fetch(PC() - 4);
+      tracer(*this, PC() - 4, ins);
+      process(ins, type);
     }
   }
 
@@ -497,55 +521,47 @@ template<std::size_t RAM_Size = 1024> struct System
       }
     }
 
-    if (!pre_indexed || val.write_back()) {
-      registers[val.base_register()] = indexed_location;
-    }
+    if (!pre_indexed || val.write_back()) { registers[val.base_register()] = indexed_location; }
   }
 
   constexpr void data_processing(const Data_Processing val) noexcept
   {
-    const auto first_operand              = registers[val.operand_1_register()];
-    const auto[carry_out, second_operand] = get_second_operand(val);
-    const auto destination_register       = val.destination_register();
-    auto &destination                     = registers[destination_register];
+    const auto first_operand               = registers[val.operand_1_register()];
+    const auto [carry_out, second_operand] = get_second_operand(val);
+    const auto destination_register        = val.destination_register();
+    auto &destination                      = registers[destination_register];
 
-    const auto update_logical_flags = [ =, &destination, carry_out = carry_out ](const bool write, const auto result)
-    {
+    const auto update_logical_flags = [=, &destination, carry_out = carry_out](const bool write, const auto result) {
       if (val.set_condition_code() && destination_register != 15) {
         c_flag(carry_out);
         z_flag(result == 0);
         n_flag(test_bit(result, 31));
       }
-      if (write) {
-        destination = result;
-      }
+      if (write) { destination = result; }
     };
 
     // use 64 bit operations to be able to capture carry
     const auto arithmetic =
-      [ =, &destination, carry = c_flag(), first_operand = static_cast<std::uint64_t>(first_operand), second_operand = second_operand ](
-        const bool write, const auto op)
-    {
-      const auto result = op(first_operand, second_operand, carry);
+      [=, &destination, carry = c_flag(), first_operand = static_cast<std::uint64_t>(first_operand), second_operand = second_operand](
+        const bool write, const auto op) {
+        const auto result = op(first_operand, second_operand, carry);
 
-      static_assert(std::is_same_v<std::decay_t<decltype(result)>, std::uint64_t>);
+        static_assert(std::is_same_v<std::decay_t<decltype(result)>, std::uint64_t>);
 
-      if (val.set_condition_code() && destination_register != 15) {
-        z_flag(result == 0);
-        n_flag(result & (1u << 31));
-        c_flag(result & (1ull << 32));
+        if (val.set_condition_code() && destination_register != 15) {
+          z_flag(result == 0);
+          n_flag(result & (1u << 31));
+          c_flag(result & (1ull << 32));
 
-        const auto first_op_sign  = test_bit(static_cast<std::uint32_t>(first_operand), 31);
-        const auto second_op_sign = test_bit(static_cast<std::uint32_t>(second_operand), 31);
-        const auto result_sign    = test_bit(static_cast<std::uint32_t>(result), 31);
+          const auto first_op_sign  = test_bit(static_cast<std::uint32_t>(first_operand), 31);
+          const auto second_op_sign = test_bit(static_cast<std::uint32_t>(second_operand), 31);
+          const auto result_sign    = test_bit(static_cast<std::uint32_t>(result), 31);
 
-        v_flag((first_op_sign == second_op_sign) && (result_sign != first_op_sign));
-      }
+          v_flag((first_op_sign == second_op_sign) && (result_sign != first_op_sign));
+        }
 
-      if (write) {
-        destination = static_cast<std::uint32_t>(result);
-      }
-    };
+        if (write) { destination = static_cast<std::uint32_t>(result); }
+      };
 
 
     switch (val.get_opcode()) {
@@ -591,15 +607,13 @@ template<std::size_t RAM_Size = 1024> struct System
 
   constexpr void multiply_long(const Multiply_Long val) noexcept
   {
-    const auto result = [ val, lhs = registers[val.operand_1()], rhs = registers[val.operand_2()] ]()
-    {
+    const auto result = [val, lhs = registers[val.operand_1()], rhs = registers[val.operand_2()]]() {
       if (val.unsigned_mul()) {
         return static_cast<std::uint64_t>(lhs) * static_cast<std::uint64_t>(rhs);
       } else {
         return static_cast<std::uint64_t>(static_cast<std::int64_t>(lhs) * static_cast<std::int64_t>(rhs));
       }
-    }
-    ();
+    }();
 
     if (val.accumulate()) {
       registers[val.high_result()] += static_cast<std::uint32_t>((result >> 32) & 0xFFFFFFFF);
@@ -669,23 +683,23 @@ template<std::size_t RAM_Size = 1024> struct System
   // make this constexpr static and it gets initialized exactly once, no question
   constexpr static auto lookup_table = get_lookup_table();
 
-  [[nodiscard]] constexpr auto decode(const Instruction instruction) noexcept
+  [[nodiscard]] constexpr auto decode(const Instruction instruction) const noexcept
   {
     for (const auto &elem : lookup_table) {
-      if ((std::get<0>(elem) & instruction) == std::get<1>(elem)) {
-        return std::get<2>(elem);
-      }
+      if ((std::get<0>(elem) & instruction) == std::get<1>(elem)) { return std::get<2>(elem); }
     }
 
     return Instruction_Type::Undefined;
   }
 
-  constexpr void process(const Instruction instruction) noexcept
+  constexpr void process(const Instruction instruction) noexcept { process(instruction, decode(instruction)); }
+
+  constexpr void process(const Instruction instruction, const Instruction_Type type) noexcept
   {
     // account for prefetch
     PC() += 4;
     if (check_condition(instruction)) {
-      switch (decode(instruction)) {
+      switch (type) {
       case Instruction_Type::Data_Processing: data_processing(instruction); break;
       case Instruction_Type::MRS: unhandled_instruction("MRS", instruction); break;
       case Instruction_Type::MSR: unhandled_instruction("MSR", instruction); break;
@@ -705,7 +719,7 @@ template<std::size_t RAM_Size = 1024> struct System
     }
 
     // discount prefetch
-    //PC() -= 4;
+    // PC() -= 4;
   }
 };  // namespace ARM_Thing
 

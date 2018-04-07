@@ -15,9 +15,7 @@ template<typename Cont> void dump_rom(const Cont &c)
 
   for (const auto byte : c) {
     std::cerr << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(byte) << ' ';
-    if ((++loc % 16) == 0) {
-      std::cerr << '\n';
-    }
+    if ((++loc % 16) == 0) { std::cerr << '\n'; }
   }
   std::cerr << '\n';
 }
@@ -63,9 +61,10 @@ int main(const int argc, const char *argv[])
 
 
     auto last_registers = sys.registers;
-    int opcount = 0;
-    const auto tracer = [&opcount, &last_registers](const auto &sys) {
-//      std::cout << opcount++;
+    int opcount         = 0;
+    const auto tracer   = [&opcount, &last_registers](const auto &sys, const auto pc, const auto ins) {
+      //std::cout << opcount++;
+      //std::cout << ' ' << std::setw(8) << std::setfill('0') << std::hex << pc << ' ' << ins.data();
       /*
       for (std::size_t reg = 0; reg < sys.registers.size(); ++reg) {
         if (sys.registers[reg] == last_registers[reg]) {
@@ -75,13 +74,13 @@ int main(const int argc, const char *argv[])
         }
         std::cout <<' ' << std::setw(8) << std::setfill('0') << std::hex << sys.registers[reg];
       }
-      last_registers = sys.registers;
-      std::cout << '\n';
       */
+      //last_registers = sys.registers;
+      //std::cout << '\n';
 
-      if ( (++opcount) % 1000 == 0) {
-        std::cout << opcount++ << '\n';
-      }
+            if ( (++opcount) % 1000 == 0) {
+              std::cout << opcount++ << '\n';
+            }
     };
 
     sys.run(0x01000000, tracer);
