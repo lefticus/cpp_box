@@ -72,6 +72,7 @@ struct Instruction : Strongly_Typed<std::uint32_t, Instruction>
   using Strongly_Typed::Strongly_Typed;
 
   [[nodiscard]] constexpr Condition get_condition() const noexcept { return static_cast<Condition>(0b1111 & (m_val >> 28)); }
+  [[nodiscard]] constexpr bool unconditional() const noexcept { return ((m_val >> 28) & 0b1111) == 0b1110; }
 
   friend struct Data_Processing;
   friend struct Single_Data_Transfer;
@@ -125,19 +126,16 @@ struct Data_Processing : Strongly_Typed<std::uint32_t, Data_Processing>
   [[nodiscard]] constexpr auto operand_2_immediate() const noexcept
   {
     const auto op_2  = operand_2();
-    const auto value = static_cast<std::int8_t>(0b1111'1111 & op_2);
-
-    // I believe this is defined behavior
-    const auto sign_extended_value = static_cast<std::uint32_t>(static_cast<std::int32_t>(value));
+    const auto value = static_cast<std::uint32_t>(0b1111'1111 & op_2);
 
     const auto shift_right = (op_2 >> 8) * 2;
 
     // Avoiding UB for shifts >= size
-    if (shift_right == 0 || shift_right == 32) { return static_cast<std::uint32_t>(sign_extended_value); }
+    if (shift_right == 0 || shift_right == 32) { return static_cast<std::uint32_t>(value); }
 
     // Should create a ROR on any modern compiler.
     // no branching, CMOV on GCC
-    return (sign_extended_value >> shift_right) | (sign_extended_value << (32 - shift_right));
+    return (value >> shift_right) | (value << (32 - shift_right));
   }
 
   constexpr auto destination_register() const noexcept { return 0b1111 & (m_val >> 12); }
@@ -252,8 +250,6 @@ template<std::size_t RAM_Size = 1024> struct System
   };
 
   std::array<std::uint8_t, RAM_Size> builtin_ram{};
-  std::array<RAM_Block, 16> ram_map;
-  std::array<ROM_Block, 16> rom_map;
 
   void invalid_memory_byte_write([[maybe_unused]] const std::uint32_t loc) const { std::terminate(); }
   void invalid_memory_word_write([[maybe_unused]] const std::uint32_t loc) const { std::terminate(); }
@@ -266,27 +262,9 @@ template<std::size_t RAM_Size = 1024> struct System
     std::terminate();
   }
 
-  template<typename Container> constexpr void set(Container &cont, const std::uint32_t start, const std::size_t ram_slot)
-  {
-    /// \todo check assumption that start + size <= std::integer_limits<std::uint32_t>::max
-    ram_map[ram_slot] = { true, cont.data(), start, static_cast<std::uint32_t>(start + cont.size() - 1) };
-  }
-
-  template<typename Container> constexpr void set(const Container &cont, const std::uint32_t start, const std::size_t rom_slot)
-  {
-    /// \todo check assumption that start + size <= std::integer_limits<std::uint32_t>::max
-    rom_map[rom_slot] = { true, cont.data(), start, static_cast<std::uint32_t>(start + cont.size() - 1) };
-  }
-
 
   constexpr std::uint8_t read_byte(const std::uint32_t loc) const noexcept
   {
-    for (auto &block : ram_map) {
-      if (block.in_use && loc >= block.start && loc <= block.end) { return *(block.data + (loc - block.start)); }
-    }
-    for (auto &block : rom_map) {
-      if (block.in_use && loc >= block.start && loc <= block.end) { return *(block.data + (loc - block.start)); }
-    }
     if (loc < RAM_Size) { return builtin_ram[loc]; }
 
     return invalid_memory_byte_read(loc);
@@ -294,12 +272,6 @@ template<std::size_t RAM_Size = 1024> struct System
 
   constexpr void write_byte(const std::uint32_t loc, const std::uint8_t value) noexcept
   {
-    for (auto &block : ram_map) {
-      if (block.in_use && loc >= block.start && loc <= block.end) {
-        block.data[loc - block.start] = value;
-        return;
-      }
-    }
     if (loc < RAM_Size) {
       builtin_ram[loc] = value;
       return;
@@ -313,12 +285,6 @@ template<std::size_t RAM_Size = 1024> struct System
   template<typename Error_Handler> constexpr std::uint32_t read_word(const std::uint32_t loc, Error_Handler &&error_handler) const noexcept
   {
     const std::uint8_t *data = [&]() -> const std::uint8_t * {
-      for (const auto &block : ram_map) {
-        if (block.in_use && loc >= block.start && loc + 3 <= block.end) { return block.data + (loc - block.start); }
-      }
-      for (const auto &block : rom_map) {
-        if (block.in_use && loc >= block.start && loc + 3 <= block.end) { return block.data + (loc - block.start); }
-      }
       if (loc + 3 < RAM_Size) { return &builtin_ram[loc]; }
       return nullptr;
     }();
@@ -341,9 +307,6 @@ template<std::size_t RAM_Size = 1024> struct System
   constexpr void write_word(const std::uint32_t loc, const std::uint32_t value) noexcept
   {
     auto *data = [&]() -> std::uint8_t * {
-      for (auto &block : ram_map) {
-        if (block.in_use && loc >= block.start && loc + 3 <= block.end) { return block.data + (loc - block.start); }
-      }
       if (loc + 3 <= RAM_Size) { return &builtin_ram[loc]; }
       return nullptr;
     }();
@@ -360,6 +323,14 @@ template<std::size_t RAM_Size = 1024> struct System
 
 
   constexpr System() = default;
+
+  template<typename Container> constexpr System(const Container &memory) noexcept
+  {
+    for (std::size_t loc = 0; loc < memory.size(); ++loc) {
+      // cast is safe - we verified this statically assigned RAM was the right size
+      write_byte(static_cast<std::uint32_t>(loc), memory[loc]);
+    }
+  }
 
   template<std::size_t Size> constexpr System(const std::array<std::uint8_t, Size> &memory) noexcept
   {
@@ -684,7 +655,7 @@ template<std::size_t RAM_Size = 1024> struct System
   // make this constexpr static and it gets initialized exactly once, no question
   constexpr static auto lookup_table = get_lookup_table();
 
-  [[nodiscard]] constexpr auto decode(const Instruction instruction) const noexcept
+  [[nodiscard]] static constexpr auto decode(const Instruction instruction) noexcept
   {
     for (const auto &elem : lookup_table) {
       if ((std::get<0>(elem) & instruction) == std::get<1>(elem)) { return std::get<2>(elem); }
@@ -699,7 +670,7 @@ template<std::size_t RAM_Size = 1024> struct System
   {
     // account for prefetch
     PC() += 4;
-    if (check_condition(instruction)) {
+    if (instruction.unconditional() || check_condition(instruction)) {
       switch (type) {
       case Instruction_Type::Data_Processing: data_processing(instruction); break;
       case Instruction_Type::MRS: unhandled_instruction("MRS", instruction); break;

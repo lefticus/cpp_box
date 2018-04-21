@@ -24,6 +24,15 @@ template<std::size_t N> constexpr auto run_code(std::uint32_t start, std::array<
   return system;
 }
 
+template<typename ... T> constexpr auto run(T ... bytes)
+{
+  std::array<uint8_t, sizeof...(T)> data{static_cast<std::uint8_t>(bytes) ...};
+  ARM_Thing::System system{ data };
+  system.run(0);
+  return system;
+}
+
+
 
 TEST_CASE("test always executing jump")
 {
@@ -148,9 +157,83 @@ TEST_CASE("Test arbitrary code execution with loop")
 }
 
 
-void test_condition_parsing()
+TEST_CASE("Test condition parsing")
 {
   REQUIRE(static_test<ARM_Thing::Instruction{ 0b1110'1010'0000'0000'0000'0000'0000'1111 }.get_condition() == ARM_Thing::Condition::AL>());
 }
 
+TEST_CASE("Test mov parsing")
+{
+  // 0:	e3a000e9 	mov	r0, #233	; 0xe9
+
+  constexpr ARM_Thing::Instruction ins{ 0b1110'0011'1010'0000'0000'0000'1110'1001 };
+  constexpr ARM_Thing::Data_Processing dp{ ins };
+
+  REQUIRE(static_test<ins.get_condition() == ARM_Thing::Condition::AL>());
+  REQUIRE(static_test<dp.get_opcode() == ARM_Thing::OpCode::MOV>());
+  REQUIRE(static_test<ins.unconditional()>());
+  REQUIRE(static_test<ARM_Thing::System<>::decode(ins) == ARM_Thing::Instruction_Type::Data_Processing>());
+
+  REQUIRE(static_test<dp.operand_1_register() == 0>());
+  REQUIRE(static_test<dp.destination_register() == 0>());
+
+  REQUIRE(static_test<dp.immediate_operand()>());
+  REQUIRE(static_test<dp.operand_2_immediate() == 233>());
+}
+
+TEST_CASE("Test orr parsing")
+{
+  // e3800c03 	orr	r0, r0, #768	; 0x300
+
+  constexpr ARM_Thing::Instruction ins{ 0b1110'0011'1000'0000'0000'1100'0000'0011 };
+  constexpr ARM_Thing::Data_Processing dp{ ins };
+
+  REQUIRE(static_test<ins.get_condition() == ARM_Thing::Condition::AL>());
+  REQUIRE(static_test<ins.unconditional()>());
+  REQUIRE(static_test<ARM_Thing::System<>::decode(ins) == ARM_Thing::Instruction_Type::Data_Processing>());
+
+  REQUIRE(static_test<dp.get_opcode() == ARM_Thing::OpCode::ORR>());
+  REQUIRE(static_test<dp.operand_1_register() == 0>());
+  REQUIRE(static_test<dp.destination_register() == 0>());
+
+  REQUIRE(static_test<dp.immediate_operand()>());
+  REQUIRE(static_test<dp.operand_2_immediate() == 768>());
+}
+
+TEST_CASE("Test complex register value setting")
+{
+  // 0:	e3a000e9 	mov	r0, #233	; 0xe9
+  // 4:	e3800c03 	orr	r0, r0, #768	; 0x300
+  constexpr auto thing = run(0xe9, 0x00, 0xa0, 0xe3,
+                             0x03, 0x0c, 0x80, 0xe3);
+//  std::cout << thing.registers[0] << '\n';
+  REQUIRE(static_test<thing.registers[0] == 1001>());
+}
+
+TEST_CASE("Test arbitrary movs")
+{
+  // 0:	e3a000e9 	mov	r0, #233	; 0xe9
+  // 4:	e3a0100c 	mov	r1, #12
+
+  constexpr auto system = run(0xe9, 0x00, 0xa0, 0xe3,
+                             0x0c, 0x10, 0xa0, 0xe3);
+  REQUIRE(static_test<system.registers[0] == 233>());
+  REQUIRE(static_test<system.registers[1] == 12>());
+}
+
+TEST_CASE("Test arbitrary code")
+{
+
+  //00000000 <main>:
+  // 0:	e3a000e9 	mov	r0, #233	; 0xe9
+  // 4:	e3a0100c 	mov	r1, #12
+  // 8:	e3800c03 	orr	r0, r0, #768	; 0x300
+  // c:	e5c01000 	strb	r1, [r0]
+  //10:	e3a00000 	mov	r0, #0
+  //14:	e1a0f00e 	mov	pc, lr
+
+  constexpr auto thing = run(0xe9,0,0xa0,0xe3,
+                             0x0c, 0x10, 0xa0, 0xe3, 0x03, 0x0c, 0x80, 0xe3, 0x00, 0x10, 0xc0, 0xe5, 0x00, 0x00, 0xa0, 0xe3, 0x0e, 0xf0, 0xa0,0xe1);
+  REQUIRE(static_test<thing.read_byte(1001) == 12>());
+}
 
