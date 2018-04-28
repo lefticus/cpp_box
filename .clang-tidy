@@ -1,0 +1,8 @@
+---
+Checks:          'bugprone-*,cert-*,hicpp-*,misc-*,modernize-*,performance-*,readability-*'
+WarningsAsErrors: ''
+HeaderFilterRegex: ''
+AnalyzeTemporaryDtors: false
+FormatStyle:     none
+...
+
