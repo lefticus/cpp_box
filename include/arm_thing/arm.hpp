@@ -330,6 +330,7 @@ template<std::size_t RAM_Size = 1024> struct System
       // cast is safe - we verified this statically assigned RAM was the right size
       write_byte(static_cast<std::uint32_t>(loc), memory[loc]);
     }
+    i_cache.fill_cache(*this);
   }
 
   template<std::size_t Size> constexpr System(const std::array<std::uint8_t, Size> &memory) noexcept
@@ -340,62 +341,72 @@ template<std::size_t RAM_Size = 1024> struct System
       // cast is safe - we verified this statically assigned RAM was the right size
       write_byte(static_cast<std::uint32_t>(loc), memory[loc]);
     }
+    i_cache.fill_cache(*this);
   }
 
   constexpr Instruction get_instruction(const std::uint32_t PC) noexcept { return Instruction{ read_word(PC) }; }
 
-  template<typename Tracer = void (*)(const System &, std::uint32_t, Instruction)>
-  constexpr void run(const std::uint32_t loc, Tracer &&tracer = [](const System &, const auto, const auto) {}) noexcept
+  constexpr void setup_run(const std::uint32_t loc)
   {
-    struct I_Cache
-    {
-      struct Cache_Elem
-      {
-        Instruction instruction{ 0 };
-        Instruction_Type type{};
-      };
-
-      constexpr I_Cache(const System &sys, const std::uint32_t t_start) noexcept : start(t_start), m_system(sys) { fill_cache(); }
-
-      constexpr Cache_Elem fetch(const std::uint32_t loc) noexcept
-      {
-        if (loc > start + (cache.size() * 4)) {
-          start = loc;
-          fill_cache();
-        }
-
-        return cache[(loc - start) / 4];
-      }
-
-      constexpr void fill_cache() noexcept
-      {
-        auto loc = start;
-        for (auto &elem : cache) {
-          elem.instruction = Instruction{ m_system.read_word(loc, [](const auto) -> std::uint32_t { return 0; }) };
-          elem.type        = m_system.decode(elem.instruction);
-          loc += 4;
-        }
-      }
-
-    private:
-      std::uint32_t start{ 0 };
-
-      std::array<Cache_Elem, 1024> cache;
-      const System &m_system;
-    };
-
-    I_Cache i_cache{ *this, loc };
-
     // Set return from call register, so when 'main' returns,
     // we'll be at the end of local RAM
     registers[14] = RAM_Size - 4;
+    PC()          = loc + 4;
+  }
 
-    PC() = loc + 4;
-    while (PC() != RAM_Size - 4) {
-      const auto [ins, type] = i_cache.fetch(PC() - 4);
-      tracer(*this, PC() - 4, ins);
-      process(ins, type);
+  template<typename Tracer = void (*)(const System &, std::uint32_t, Instruction)>
+  constexpr void next_operation(Tracer &&tracer = [](const System &, const auto, const auto) {}) noexcept
+  {
+    const auto [ins, type] = i_cache.fetch(PC() - 4, *this);
+    tracer(*this, PC() - 4, ins);
+    process(ins, type);
+  }
+
+  constexpr bool operations_remaining() const noexcept { return PC() != RAM_Size - 4; }
+
+  struct I_Cache
+  {
+    struct Cache_Elem
+    {
+      Instruction instruction{ 0 };
+      Instruction_Type type{};
+    };
+
+    constexpr I_Cache(const System &sys, const std::uint32_t t_start) noexcept : start(t_start) { fill_cache(sys); }
+
+    constexpr Cache_Elem fetch(const std::uint32_t loc, const System &sys) noexcept
+    {
+      if (loc > start + (cache.size() * 4)) {
+        start = loc;
+        fill_cache(sys);
+      }
+
+      return cache[(loc - start) / 4];
     }
+
+    constexpr void fill_cache(const System &sys) noexcept
+    {
+      auto loc = start;
+      for (auto &elem : cache) {
+        elem.instruction = Instruction{ sys.read_word(loc, [](const auto) -> std::uint32_t { return 0; }) };
+        elem.type        = sys.decode(elem.instruction);
+        loc += 4;
+      }
+    }
+
+  private:
+    std::uint32_t start{ 0 };
+
+    std::array<Cache_Elem, 1024> cache;
+  };
+
+  I_Cache i_cache{ *this, 0 };
+
+  template<typename Tracer = void (*)(const System &, std::uint32_t, Instruction)>
+  constexpr void run(const std::uint32_t loc, Tracer &&tracer = [](const System &, const auto, const auto) {}) noexcept
+  {
+    setup_run(loc);
+    while (operations_remaining()) { next_operation(tracer); }
   }
 
   [[nodiscard]] constexpr auto get_second_operand_shift_amount(const Data_Processing val) const noexcept

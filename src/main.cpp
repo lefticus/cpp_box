@@ -30,6 +30,24 @@ template<typename Map> void dump_memory_map(const Map &m)
   }
 }
 
+template<typename System>
+void dump_state(const System &sys)
+{
+  std::cout << ' ' << std::setw(8) << std::setfill('0') << std::hex << sys.pc() << ' ' << ins.data();
+
+  for (std::size_t reg = 0; reg < sys.registers.size(); ++reg) {
+    if (sys.registers[reg] == last_registers[reg]) {
+      std::cout << rang::style::dim;
+    } else {
+      std::cout << rang::style::reset;
+    }
+    std::cout << ' ' << std::setw(8) << std::setfill('0') << std::hex << sys.registers[reg];
+  }
+
+  last_registers = sys.registers;
+  std::cout << '\n';
+}
+
 int main(const int argc, const char *argv[])
 {
   std::vector<std::string> args{ argv, argv + argc };
@@ -52,32 +70,16 @@ int main(const int argc, const char *argv[])
       }
     }();
 
-    ARM_Thing::System sys{RAM};
+    ARM_Thing::System sys{ RAM };
     dump_rom(RAM);
 
     auto last_registers = sys.registers;
     int opcount         = 0;
-    const auto tracer   = [&opcount, &last_registers](const auto &sys, const auto pc, const auto ins) {
-      /*
-      std::cout << opcount++;
-      std::cout << ' ' << std::setw(8) << std::setfill('0') << std::hex << pc << ' ' << ins.data();
-
-      for (std::size_t reg = 0; reg < sys.registers.size(); ++reg) {
-        if (sys.registers[reg] == last_registers[reg]) {
-          std::cout << rang::style::dim;
-        } else {
-          std::cout << rang::style::reset;
-        }
-        std::cout << ' ' << std::setw(8) << std::setfill('0') << std::hex << sys.registers[reg];
-      }
-
-      last_registers = sys.registers;
-      std::cout << '\n';
-*/
-
-      if ((++opcount) % 1000 == 0) { std::cout << opcount << '\n'; }
-    };
+    const auto tracer   = [&opcount, &last_registers](const auto &sys, const auto pc, const auto ins) { };
 
     sys.run(0x00000000, tracer);
+
+    dump_state(sys);
+    //if ((++opcount) % 1000 == 0) { std::cout << opcount << '\n'; }
   }
 }

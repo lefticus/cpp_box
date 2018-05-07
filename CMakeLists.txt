@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.2)
 
+set(CMAKE_MODULE_PATH /usr/share/SFML/cmake/Modules)
 include(cmake/Catch.cmake)
 
 option(BUILD_SHARED_LIBS "Enable compilation of shared libraries" FALSE)
@@ -75,17 +76,18 @@ add_executable(arm_emu src/main.cpp)
 target_link_libraries(arm_emu PRIVATE project_options project_warnings)
 
 
-# imgui example
-# find_package(SFML COMPONENTS graphics window system)
-# find_package(OpenGL)
+# imgui dependencies
+find_package(SFML COMPONENTS graphics window system)
+find_package(OpenGL)
+
 
 # imgui + sfml built as a lib, intentionally not using full warning flags
-# add_library(imgui imgui/lib/imgui.cpp imgui/lib/imgui_draw.cpp imgui/lib/imgui-SFML.cpp)
-# target_link_libraries(imgui INTERFACE ${SFML_LIBRARIES} ${OPENGL_gl_LIBRARY})
+add_library(imgui src/imgui/lib/imgui.cpp src/imgui/lib/imgui_draw.cpp src/imgui/lib/imgui-SFML.cpp)
+target_link_libraries(imgui INTERFACE ${SFML_LIBRARIES} ${OPENGL_gl_LIBRARY})
 
 # imgui test executable, with full warnings enabled
-# add_executable(test_imgui imgui/test.cpp)
-# target_link_libraries(test_imgui PRIVATE project_warnings imgui)
-# target_include_directories(test_imgui PRIVATE ${SFML_INCLUDE_DIR})
+add_executable(imgui_client src/imgui_client.cpp)
+target_link_libraries(imgui_client PRIVATE project_options imgui)
+target_include_directories(imgui_client PRIVATE ${SFML_INCLUDE_DIR})
 
 
