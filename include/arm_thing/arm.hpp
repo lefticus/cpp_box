@@ -578,8 +578,8 @@ template<std::size_t RAM_Size = 1024> struct System
     const auto offset = [](const auto op) -> std::int32_t {
       if (op.test_bit(23)) {
         // is signed
-        const auto twos_compliment = ((~(op & 0x00FFFFFFF)) + 1) & 0x00FFFFFF;
-        return -static_cast<int32_t>(twos_compliment << 2);
+        const auto twos_complement = ((~(op & 0x00FFFFFFF)) + 1) & 0x00FFFFFF;
+        return -static_cast<int32_t>(twos_complement << 2);
       } else {
         return static_cast<int32_t>((op & 0x00FFFFFF) << 2);
       }
