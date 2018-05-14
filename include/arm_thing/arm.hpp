@@ -263,7 +263,7 @@ template<std::size_t RAM_Size = 1024> struct System
   }
 
 
-  constexpr std::uint8_t read_byte(const std::uint32_t loc) const noexcept
+  [[nodiscard]] constexpr std::uint8_t read_byte(const std::uint32_t loc) const noexcept
   {
     if (loc < RAM_Size) { return builtin_ram[loc]; }
 
@@ -585,7 +585,7 @@ template<std::size_t RAM_Size = 1024> struct System
       }
     }(instruction);
 
-    PC() += offset + 4;
+    PC() += static_cast<std::uint32_t>(offset + 4);
   }
 
   constexpr void multiply_long(const Multiply_Long val) noexcept

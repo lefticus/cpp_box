@@ -49,18 +49,24 @@ else()
                          -Wpedantic # warn if non-standard C++ is used
                          -Wconversion # warn on type conversions that may lose data
                          -Wsign-conversion # warn on sign conversions
-                         -Wmisleading-indentation # warn if identation implies blocks where blocks
-                                                  # do not exist
-                         -Wduplicated-cond # warn if if / else chain has duplicated conditions
-                         -Wduplicated-branches # warn if if / else branches have duplicated code
-                         -Wlogical-op # warn about logical operations being used where bitwise were
-                                      # probably wanted
                          -Wnull-dereference # warn if a null dereference is detected
-                         -Wuseless-cast # warn if you perform a cast to the same type
                          -Wdouble-promotion # warn if float is implicit promoted to double
                          -Wformat=2 # warn on security issues around functions that format output
                                     # (ie printf)
                          )
+
+  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    target_compile_options(project_warnings
+                           INTERFACE
+                           -Wmisleading-indentation # warn if identation implies blocks where blocks
+                                                    # do not exist
+                           -Wduplicated-cond # warn if if / else chain has duplicated conditions
+                           -Wduplicated-branches # warn if if / else branches have duplicated code
+                           -Wlogical-op # warn about logical operations being used where bitwise were
+                                        # probably wanted
+                           -Wuseless-cast # warn if you perform a cast to the same type
+                           )
+  endif()
 endif()
 
 #add_executable(arm main.cpp)

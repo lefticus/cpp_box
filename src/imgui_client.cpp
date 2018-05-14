@@ -84,6 +84,13 @@ int main(const int argc, const char *argv[])
     bool paused = true;
     bool step_one = false;
 
+    std::string src;
+    src.resize(1024);
+
+    std::string bin;
+    bin.resize(1024);
+
+
     while (window.isOpen()) {
       sf::Event event;
       while (window.pollEvent(event)) {
@@ -187,6 +194,24 @@ int main(const int argc, const char *argv[])
       if (ImGui::Button("Reset")) {
         sys = decltype(sys){RAM};
       }
+      ImGui::End();
+
+      ImGui::Begin("Code");
+      if (ImGui::InputTextMultiline("Src", src.data(), src.size())) {
+        if (std::ofstream ofs("/tmp/src.cpp"); ofs.good()) {
+          ofs.write(src.data(), src.find_first_of('\0', 0));
+          ofs.flush();
+        }
+        system("/home/jason/clang-trunk/bin/clang++ /tmp/src.cpp -S -o /tmp/src.asm -O3 -mllvm --x86-asm-syntax=intel --target=armv4");
+        if (std::ifstream ifs{ "/tmp/src.asm", std::ios::binary }; ifs.good()) {
+          const auto file_size = ifs.seekg(0, std::ios_base::end).tellg();
+          ifs.seekg(0);
+          bin.resize(static_cast<std::size_t>(file_size));
+          ifs.read(bin.data(), file_size);
+        }
+      }
+      ImGui::SameLine();
+      ImGui::InputTextMultiline("Bin", bin.data(), bin.size(), {}, ImGuiInputTextFlags_ReadOnly);
       ImGui::End();
 
       window.clear();

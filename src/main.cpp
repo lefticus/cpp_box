@@ -30,10 +30,10 @@ template<typename Map> void dump_memory_map(const Map &m)
   }
 }
 
-template<typename System>
-void dump_state(const System &sys)
+template<typename System, typename Registers>
+void dump_state(const System &sys, const Registers &last_registers)
 {
-  std::cout << ' ' << std::setw(8) << std::setfill('0') << std::hex << sys.pc() << ' ' << ins.data();
+  std::cout << ' ' << std::setw(8) << std::setfill('0') << std::hex << sys.PC();
 
   for (std::size_t reg = 0; reg < sys.registers.size(); ++reg) {
     if (sys.registers[reg] == last_registers[reg]) {
@@ -44,7 +44,6 @@ void dump_state(const System &sys)
     std::cout << ' ' << std::setw(8) << std::setfill('0') << std::hex << sys.registers[reg];
   }
 
-  last_registers = sys.registers;
   std::cout << '\n';
 }
 
@@ -75,11 +74,13 @@ int main(const int argc, const char *argv[])
 
     auto last_registers = sys.registers;
     int opcount         = 0;
-    const auto tracer   = [&opcount, &last_registers](const auto &sys, const auto pc, const auto ins) { };
+    const auto tracer   = [&opcount]([[maybe_unused]] const auto &sys, [[maybe_unused]] const auto pc, [[maybe_unused]] const auto ins) { ++opcount; };
 
     sys.run(0x00000000, tracer);
 
-    dump_state(sys);
+    std::cout << "Total instructions executed: " << opcount << '\n';
+
+    dump_state(sys, last_registers);
     //if ((++opcount) % 1000 == 0) { std::cout << opcount << '\n'; }
   }
 }
