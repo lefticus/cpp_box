@@ -125,8 +125,8 @@ struct Data_Processing : Strongly_Typed<std::uint32_t, Data_Processing>
 
   [[nodiscard]] constexpr auto operand_2_immediate() const noexcept
   {
-    const auto op_2  = operand_2();
-    const auto value = static_cast<std::uint32_t>(0b1111'1111 & op_2);
+    const auto op_2           = operand_2();
+    const std::uint32_t value = 0b1111'1111 & op_2;
 
     const auto shift_right = (op_2 >> 8) * 2;
 
@@ -265,19 +265,20 @@ template<std::size_t RAM_Size = 1024> struct System
 
   [[nodiscard]] constexpr std::uint8_t read_byte(const std::uint32_t loc) const noexcept
   {
-    if (loc < RAM_Size) { return builtin_ram[loc]; }
-
-    return invalid_memory_byte_read(loc);
+    if (loc < RAM_Size) {
+      return builtin_ram[loc];
+    } else {
+      return invalid_memory_byte_read(loc);
+    }
   }
 
   constexpr void write_byte(const std::uint32_t loc, const std::uint8_t value) noexcept
   {
     if (loc < RAM_Size) {
       builtin_ram[loc] = value;
-      return;
+    } else {
+      invalid_memory_byte_write(loc);
     }
-
-    invalid_memory_byte_write(loc);
   }
 
   constexpr std::uint32_t read_word(const std::uint32_t loc) const noexcept { return read_word(loc, invalid_memory_word_read); }
@@ -312,10 +313,10 @@ template<std::size_t RAM_Size = 1024> struct System
     }();
 
     if (data) {
-      data[0] = value & 0xFF;
-      data[1] = (value >> 8) & 0xFF;
-      data[2] = (value >> 16) & 0xFF;
-      data[3] = (value >> 24) & 0xFF;
+      data[0] = static_cast<std::uint8_t>(value & 0xFF);
+      data[1] = static_cast<std::uint8_t>((value >> 8) & 0xFF);
+      data[2] = static_cast<std::uint8_t>((value >> 16) & 0xFF);
+      data[3] = static_cast<std::uint8_t>((value >> 24) & 0xFF);
     } else {
       invalid_memory_word_write(loc);
     }

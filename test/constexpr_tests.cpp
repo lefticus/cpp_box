@@ -75,14 +75,14 @@ TEST_CASE("test multiple adds and sub")
 
 TEST_CASE("test memory writes")
 {
-  auto systest6 = run_instruction(ARM_Thing::Instruction{ 0xe3a00064 },  // mov r0, #100 ; 0x64
+  constexpr auto systest6 = run_instruction(ARM_Thing::Instruction{ 0xe3a00064 },  // mov r0, #100 ; 0x64
                                             ARM_Thing::Instruction{ 0xe3a01005 },  // mov r1, #5
                                             ARM_Thing::Instruction{ 0xe5c01000 },  // strb r1, [r0]
                                             ARM_Thing::Instruction{ 0xe3a00000 },  // mov r0, #0
                                             ARM_Thing::Instruction{ 0xe1a0f00e }   // mov pc, lr
   );
 
-  //REQUIRE(static_test<systest6.read_byte(100) == 5>());
+  REQUIRE(static_test<systest6.read_byte(100) == 5>());
 }
 
 
