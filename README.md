@@ -9,7 +9,7 @@ For code this can accept, use gcc or clang in `-march=armv4` mode.
 
 # About Me
 
-I'm a C++ programmer, trainer and speaker, available for code reviews and on-site training events.
+My name is Jason Turner, I'm a C++ programmer, trainer and speaker, available for code reviews and on-site training events.
 
  * If you are interested in my services for training and contracting: http://emptycrate.com/idocpp
  * Also check out my YouTube channel, C++ Weekly: https://www.youtube.com/c/JasonTurner-lefticus
