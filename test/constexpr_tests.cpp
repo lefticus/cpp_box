@@ -24,14 +24,13 @@ template<std::size_t N> constexpr auto run_code(std::uint32_t start, std::array<
   return system;
 }
 
-template<typename ... T> constexpr auto run(T ... bytes)
+template<typename... T> constexpr auto run(T... bytes)
 {
-  std::array<uint8_t, sizeof...(T)> data{static_cast<std::uint8_t>(bytes) ...};
+  std::array<uint8_t, sizeof...(T)> data{ static_cast<std::uint8_t>(bytes)... };
   ARM_Thing::System system{ data };
   system.run(0);
   return system;
 }
-
 
 
 TEST_CASE("test always executing jump")
@@ -47,6 +46,70 @@ TEST_CASE("test always executing jump with saved return")
   REQUIRE(static_test<systest3.PC() == 72>());
   REQUIRE(static_test<systest3.registers[14] == 4>());
 }
+
+TEST_CASE("test carry flag")
+{
+  //   4:	e3e01000 	mvn	r1, #0
+  //  10:	e2911001 	add	r1, r1, #1 ; and set flags
+  constexpr auto systest = run_instruction(ARM_Thing::Instruction{ 0xe3e01000 }, ARM_Thing::Instruction{ 0xe2911001 });
+  REQUIRE(static_test<systest.registers[1] == 0x0>());
+  REQUIRE(static_test<systest.c_flag()>());
+  REQUIRE(static_test<systest.z_flag()>());
+}
+
+
+TEST_CASE("register setups and moves")
+{
+  //  0:	e3a02d71 	mov	r2, #7232	; 0x1c40
+  //   4:	e3a00000 	mov	r0, #0
+  //   8:	e3a01901 	mov	r1, #16384	; 0x4000
+  //   c:	e3822903 	orr	r2, r2, #49152	; 0xc000
+  //  10:	e4c10003 	strb	r0, [r1], #3
+  //  14:	e2800001 	add	r0, r0, #1
+  //  18:	e1510002 	cmp	r1, r2
+
+  constexpr auto systest = run_instruction(ARM_Thing::Instruction{ 0xe3a02d71 },
+                                           ARM_Thing::Instruction{ 0xe3a00000 },
+                                           ARM_Thing::Instruction{ 0xe3a01901 },
+                                           ARM_Thing::Instruction{ 0xe3822903 },
+                                           ARM_Thing::Instruction{ 0xe4c10003 },
+                                           ARM_Thing::Instruction{ 0xe2800001 },
+                                           ARM_Thing::Instruction{ 0xe1510002 });
+
+  REQUIRE(static_test<systest.registers[0] == 1>());
+  REQUIRE(static_test<systest.registers[1] == 0x4003>());
+  REQUIRE(static_test<systest.registers[2] == 0x4000 + 100 * 100 * 4>());
+  REQUIRE(static_test<systest.c_flag() == false>());
+}
+
+
+TEST_CASE("CMP with carry")
+{
+  constexpr auto systest = run_instruction(ARM_Thing::Instruction{ 0xe3a01001 },   // mov r1, #1
+                                           ARM_Thing::Instruction{ 0xe3a02001 },   // mov r2, #1
+                                           ARM_Thing::Instruction{ 0xe1510002 });  // cmp r1, r2
+  // Should be true if no borrow occurred
+  REQUIRE(static_test<systest.c_flag() == true>());
+}
+
+TEST_CASE("CMP with carry 2")
+{
+  constexpr auto systest = run_instruction(ARM_Thing::Instruction{ 0xe3a01001 },   // mov r1, #1
+                                           ARM_Thing::Instruction{ 0xe3a02000 },   // mov r2, #0
+                                           ARM_Thing::Instruction{ 0xe1510002 });  // cmp r1, r2
+  // Should be true if no borrow occurred
+  REQUIRE(static_test<systest.c_flag() == true>());
+}
+
+TEST_CASE("CMP with carry 3")
+{
+  constexpr auto systest = run_instruction(ARM_Thing::Instruction{ 0xe3a01000 },   // mov r1, #0
+                                           ARM_Thing::Instruction{ 0xe3a02001 },   // mov r2, #1
+                                           ARM_Thing::Instruction{ 0xe1510002 });  // cmp r1, r2
+  // Should be false if a borrow occurred
+  REQUIRE(static_test<systest.c_flag() == false>());
+}
+
 
 TEST_CASE("test add of register")
 {
@@ -70,6 +133,16 @@ TEST_CASE("test multiple adds and sub")
                                             ARM_Thing::Instruction{ 0xe0423001 }   // sub r3, r2, r1
   );
   REQUIRE(static_test<systest6.registers[3] == static_cast<std::uint32_t>(2 - 9)>());
+}
+
+TEST_CASE("test add over 16bits")
+{
+  constexpr auto systest = run_instruction(ARM_Thing::Instruction{ 0xe3a010ff },  // mov r1, #255
+                                           ARM_Thing::Instruction{ 0xe3811cff },   // orr r1, r1 #65280
+                                           ARM_Thing::Instruction{ 0xe2811001 }   // add r1, r1, #1
+
+  );
+  REQUIRE(static_test<systest.registers[1] == 0x10000>());
 }
 
 
@@ -204,9 +277,8 @@ TEST_CASE("Test complex register value setting")
 {
   // 0:	e3a000e9 	mov	r0, #233	; 0xe9
   // 4:	e3800c03 	orr	r0, r0, #768	; 0x300
-  constexpr auto thing = run(0xe9, 0x00, 0xa0, 0xe3,
-                             0x03, 0x0c, 0x80, 0xe3);
-//  std::cout << thing.registers[0] << '\n';
+  constexpr auto thing = run(0xe9, 0x00, 0xa0, 0xe3, 0x03, 0x0c, 0x80, 0xe3);
+  //  std::cout << thing.registers[0] << '\n';
   REQUIRE(static_test<thing.registers[0] == 1001>());
 }
 
@@ -215,8 +287,7 @@ TEST_CASE("Test arbitrary movs")
   // 0:	e3a000e9 	mov	r0, #233	; 0xe9
   // 4:	e3a0100c 	mov	r1, #12
 
-  constexpr auto system = run(0xe9, 0x00, 0xa0, 0xe3,
-                             0x0c, 0x10, 0xa0, 0xe3);
+  constexpr auto system = run(0xe9, 0x00, 0xa0, 0xe3, 0x0c, 0x10, 0xa0, 0xe3);
   REQUIRE(static_test<system.registers[0] == 233>());
   REQUIRE(static_test<system.registers[1] == 12>());
 }
@@ -224,16 +295,15 @@ TEST_CASE("Test arbitrary movs")
 TEST_CASE("Test arbitrary code")
 {
 
-  //00000000 <main>:
+  // 00000000 <main>:
   // 0:	e3a000e9 	mov	r0, #233	; 0xe9
   // 4:	e3a0100c 	mov	r1, #12
   // 8:	e3800c03 	orr	r0, r0, #768	; 0x300
   // c:	e5c01000 	strb	r1, [r0]
-  //10:	e3a00000 	mov	r0, #0
-  //14:	e1a0f00e 	mov	pc, lr
+  // 10:	e3a00000 	mov	r0, #0
+  // 14:	e1a0f00e 	mov	pc, lr
 
-  constexpr auto thing = run(0xe9,0,0xa0,0xe3,
-                             0x0c, 0x10, 0xa0, 0xe3, 0x03, 0x0c, 0x80, 0xe3, 0x00, 0x10, 0xc0, 0xe5, 0x00, 0x00, 0xa0, 0xe3, 0x0e, 0xf0, 0xa0,0xe1);
+  constexpr auto thing =
+    run(0xe9, 0, 0xa0, 0xe3, 0x0c, 0x10, 0xa0, 0xe3, 0x03, 0x0c, 0x80, 0xe3, 0x00, 0x10, 0xc0, 0xe5, 0x00, 0x00, 0xa0, 0xe3, 0x0e, 0xf0, 0xa0, 0xe1);
   REQUIRE(static_test<thing.read_byte(1001) == 12>());
 }
-

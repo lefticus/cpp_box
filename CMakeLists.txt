@@ -89,7 +89,7 @@ find_package(OpenGL)
 
 # imgui + sfml built as a lib, intentionally not using full warning flags
 add_library(imgui src/imgui/lib/imgui.cpp src/imgui/lib/imgui_draw.cpp src/imgui/lib/imgui-SFML.cpp)
-target_link_libraries(imgui INTERFACE ${SFML_LIBRARIES} ${OPENGL_gl_LIBRARY})
+target_link_libraries(imgui INTERFACE sfml-graphics sfml-window sfml-system ${OPENGL_gl_LIBRARY})
 
 # imgui test executable, with full warnings enabled
 add_executable(imgui_client src/imgui_client.cpp)

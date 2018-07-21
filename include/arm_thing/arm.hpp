@@ -2,8 +2,33 @@
 #include <tuple>
 #include <algorithm>
 #include <iterator>
+#include <variant>
 
 namespace ARM_Thing {
+
+// necessary to deal with poor performing visit implementations from the std libs
+template<std::size_t Idx, typename F, typename V> constexpr decltype(auto) simple_visit_impl(F &&f, V &&t)
+{
+  if constexpr (Idx == std::variant_size_v<V> - 1) {
+    // if we get to the last item, stop recursion and assume that this
+    // version is the matching one. If it is not, then the bad_variant_access
+    // will automatically get thrown and propagated back out.
+    return (f(std::get<Idx>(std::forward<V>(t))));
+  } else {
+    if (Idx == t.index()) {
+      return (f(std::get<Idx>(std::forward<V>(t))));
+    } else {
+      return (simple_visit_impl<Idx + 1>(std::forward<F>(f), std::move(t)));
+    }
+  }
+}
+
+template<typename F, typename V> constexpr decltype(auto) simple_visit(F &&f, V &&t)
+{
+  return (simple_visit_impl<0>(std::forward<F>(f), std::forward<V>(t)));
+}
+
+
 template<typename Value, typename Bit>[[nodiscard]] constexpr bool test_bit(const Value val, const Bit bit) noexcept
 {
   return val & (static_cast<Value>(1) << bit);
@@ -77,6 +102,7 @@ struct Instruction : Strongly_Typed<std::uint32_t, Instruction>
   friend struct Data_Processing;
   friend struct Single_Data_Transfer;
   friend struct Multiply_Long;
+  friend struct Branch;
 };
 
 struct Single_Data_Transfer : Strongly_Typed<std::uint32_t, Single_Data_Transfer>
@@ -96,7 +122,7 @@ struct Single_Data_Transfer : Strongly_Typed<std::uint32_t, Single_Data_Transfer
   [[nodiscard]] constexpr auto offset_shift_type() const noexcept { return static_cast<Shift_Type>((offset_shift() >> 1) & 0b11); }
   [[nodiscard]] constexpr auto offset_shift_amount() const noexcept { return offset_shift() >> 4; }
 
-  constexpr Single_Data_Transfer(Instruction ins) noexcept : Strongly_Typed{ ins.m_val } {}
+  constexpr explicit Single_Data_Transfer(Instruction ins) noexcept : Strongly_Typed{ ins.m_val } {}
 };
 
 struct Multiply_Long : Strongly_Typed<std::uint32_t, Multiply_Long>
@@ -109,8 +135,28 @@ struct Multiply_Long : Strongly_Typed<std::uint32_t, Multiply_Long>
   [[nodiscard]] constexpr auto operand_1() const noexcept { return (m_val >> 8) & 0b1111; }
   [[nodiscard]] constexpr auto operand_2() const noexcept { return m_val & 0b1111; }
 
-  constexpr Multiply_Long(Instruction ins) noexcept : Strongly_Typed{ ins.m_val } {}
+  constexpr explicit Multiply_Long(Instruction ins) noexcept : Strongly_Typed{ ins.m_val } {}
 };
+
+struct Branch : Strongly_Typed<std::uint32_t, Branch>
+{
+  [[nodiscard]] constexpr auto offset() const noexcept -> std::int32_t
+  {
+    if (test_bit(23)) {
+      // is signed
+      const auto twos_complement = ((~(m_val & 0x00FFFFFFF)) + 1) & 0x00FFFFFF;
+      return -static_cast<int32_t>(twos_complement << 2);
+    } else {
+      return static_cast<int32_t>((m_val & 0x00FFFFFF) << 2);
+    }
+  };
+
+  [[nodiscard]] constexpr bool link() const noexcept { return test_bit(24); }
+
+
+  constexpr explicit Branch(Instruction ins) noexcept : Strongly_Typed{ ins.m_val } {}
+};
+
 
 struct Data_Processing : Strongly_Typed<std::uint32_t, Data_Processing>
 {
@@ -145,7 +191,7 @@ struct Data_Processing : Strongly_Typed<std::uint32_t, Data_Processing>
   [[nodiscard]] constexpr bool immediate_operand() const noexcept { return test_bit(25); }
 
 
-  constexpr Data_Processing(Instruction ins) noexcept : Strongly_Typed{ ins.m_val } {}
+  constexpr explicit Data_Processing(Instruction ins) noexcept : Strongly_Typed{ ins.m_val } {}
 };
 
 
@@ -229,6 +275,10 @@ template<std::size_t RAM_Size = 1024> struct System
   std::uint32_t CSPR{};
 
   std::array<std::uint32_t, 16> registers{};
+  bool invalid_memory_write{ false };
+
+  [[nodiscard]] constexpr auto &LR() noexcept { return registers[14]; }
+  [[nodiscard]] constexpr const auto &LR() const noexcept { return registers[14]; }
 
   [[nodiscard]] constexpr auto &PC() noexcept { return registers[15]; }
   [[nodiscard]] constexpr const auto &PC() const noexcept { return registers[15]; }
@@ -251,24 +301,19 @@ template<std::size_t RAM_Size = 1024> struct System
 
   std::array<std::uint8_t, RAM_Size> builtin_ram{};
 
-  void invalid_memory_byte_write([[maybe_unused]] const std::uint32_t loc) const { std::terminate(); }
-  void invalid_memory_word_write([[maybe_unused]] const std::uint32_t loc) const { std::terminate(); }
-
-  std::uint8_t invalid_memory_byte_read([[maybe_unused]] const std::uint32_t loc) const { std::terminate(); }
-  static std::uint32_t invalid_memory_word_read([[maybe_unused]] const std::uint32_t loc) { std::terminate(); }
-
   constexpr void unhandled_instruction([[maybe_unused]] const std::string_view description, [[maybe_unused]] const Instruction ins)
   {
     std::terminate();
   }
 
 
+  // read past end of allocated memory will return an unspecified value
   [[nodiscard]] constexpr std::uint8_t read_byte(const std::uint32_t loc) const noexcept
   {
     if (loc < RAM_Size) {
       return builtin_ram[loc];
     } else {
-      return invalid_memory_byte_read(loc);
+      return {};
     }
   }
 
@@ -277,13 +322,13 @@ template<std::size_t RAM_Size = 1024> struct System
     if (loc < RAM_Size) {
       builtin_ram[loc] = value;
     } else {
-      invalid_memory_byte_write(loc);
+      invalid_memory_write = true;
     }
   }
 
-  constexpr std::uint32_t read_word(const std::uint32_t loc) const noexcept { return read_word(loc, invalid_memory_word_read); }
 
-  template<typename Error_Handler> constexpr std::uint32_t read_word(const std::uint32_t loc, Error_Handler &&error_handler) const noexcept
+  // read past end of allocated memory will return an unspecified value
+  constexpr std::uint32_t read_word(const std::uint32_t loc) const noexcept
   {
     const std::uint8_t *data = [&]() -> const std::uint8_t * {
       if (loc + 3 < RAM_Size) { return &builtin_ram[loc]; }
@@ -301,7 +346,7 @@ template<std::size_t RAM_Size = 1024> struct System
 
       return byte_1 | (byte_2 << 8) | (byte_3 << 16) | (byte_4 << 24);
     } else {
-      return error_handler(loc);
+      return {};
     }
   }
 
@@ -318,7 +363,7 @@ template<std::size_t RAM_Size = 1024> struct System
       data[2] = static_cast<std::uint8_t>((value >> 16) & 0xFF);
       data[3] = static_cast<std::uint8_t>((value >> 24) & 0xFF);
     } else {
-      invalid_memory_word_write(loc);
+      invalid_memory_write = true;
     }
   }
 
@@ -342,6 +387,7 @@ template<std::size_t RAM_Size = 1024> struct System
       // cast is safe - we verified this statically assigned RAM was the right size
       write_byte(static_cast<std::uint32_t>(loc), memory[loc]);
     }
+
     i_cache.fill_cache(*this);
   }
 
@@ -389,7 +435,7 @@ template<std::size_t RAM_Size = 1024> struct System
     {
       auto loc = start;
       for (auto &elem : cache) {
-        elem.instruction = Instruction{ sys.read_word(loc, [](const auto) -> std::uint32_t { return 0; }) };
+        elem.instruction = Instruction{ sys.read_word(loc) };
         elem.type        = sys.decode(elem.instruction);
         loc += 4;
       }
@@ -452,7 +498,7 @@ template<std::size_t RAM_Size = 1024> struct System
     }
   }
 
-  [[nodiscard]] constexpr std::pair<bool, std::uint32_t> get_second_operand(const Data_Processing val) const noexcept
+  [[nodiscard]] constexpr auto get_second_operand(const Data_Processing val) const noexcept -> std::pair<bool, std::uint32_t>
   {
     if (val.immediate_operand()) {
       return { c_flag(), val.operand_2_immediate() };
@@ -481,7 +527,7 @@ template<std::size_t RAM_Size = 1024> struct System
     }
   }
 
-  constexpr void single_data_transfer(const Single_Data_Transfer val) noexcept
+  constexpr void process(const Single_Data_Transfer val) noexcept
   {
     const std::int64_t index_offset = offset(val);
     const auto base_location        = registers[val.base_register()];
@@ -508,7 +554,7 @@ template<std::size_t RAM_Size = 1024> struct System
     if (!pre_indexed || val.write_back()) { registers[val.base_register()] = indexed_location; }
   }
 
-  constexpr void data_processing(const Data_Processing val) noexcept
+  constexpr void process(const Data_Processing val) noexcept
   {
     const auto first_operand               = registers[val.operand_1_register()];
     const auto [carry_out, second_operand] = get_second_operand(val);
@@ -518,24 +564,26 @@ template<std::size_t RAM_Size = 1024> struct System
     const auto update_logical_flags = [=, &destination, carry_out = carry_out](const bool write, const auto result) {
       if (val.set_condition_code() && destination_register != 15) {
         c_flag(carry_out);
-        z_flag(result == 0);
+        z_flag((0xFFFFFFFF & result) == 0);
         n_flag(test_bit(result, 31));
       }
+
       if (write) { destination = result; }
     };
 
     // use 64 bit operations to be able to capture carry
     const auto arithmetic =
-      [=, &destination, carry = c_flag(), first_operand = static_cast<std::uint64_t>(first_operand), second_operand = second_operand](
-        const bool write, const auto op) {
+      [=, &destination, carry = c_flag(), first_operand = static_cast<std::uint64_t>(first_operand), second_operand = static_cast<std::uint64_t>(second_operand)](
+        const bool write, const bool invert_carry, const auto op) {
         const auto result = op(first_operand, second_operand, carry);
 
         static_assert(std::is_same_v<std::decay_t<decltype(result)>, std::uint64_t>);
 
         if (val.set_condition_code() && destination_register != 15) {
-          z_flag(result == 0);
+          z_flag((0xFFFFFFFF & result) == 0);
           n_flag(result & (1u << 31));
-          c_flag(result & (1ull << 32));
+          const bool carry_result = (result & (1ull << 32)) != 0;
+          c_flag(invert_carry ? !carry_result : carry_result);
 
           const auto first_op_sign  = test_bit(static_cast<std::uint32_t>(first_operand), 31);
           const auto second_op_sign = test_bit(static_cast<std::uint32_t>(second_operand), 31);
@@ -558,38 +606,28 @@ template<std::size_t RAM_Size = 1024> struct System
     case OpCode::BIC: return update_logical_flags(true, first_operand & (~second_operand));
     case OpCode::MVN: return update_logical_flags(true, ~second_operand);
 
-    case OpCode::SUB: return arithmetic(true, [](const auto op_1, const auto op_2, const auto) { return op_1 - op_2; });
-    case OpCode::RSB: return arithmetic(true, [](const auto op_1, const auto op_2, const auto) { return op_2 - op_1; });
-    case OpCode::ADD: return arithmetic(true, [](const auto op_1, const auto op_2, const auto) { return op_1 + op_2; });
-    case OpCode::ADC: return arithmetic(true, [](const auto op_1, const auto op_2, const auto c) { return op_1 + op_2 + c; });
-    case OpCode::SBC: return arithmetic(true, [](const auto op_1, const auto op_2, const auto c) { return op_1 - op_2 + c - 1; });
-    case OpCode::RSC: return arithmetic(true, [](const auto op_1, const auto op_2, const auto c) { return op_2 - op_1 + c - 1; });
-    case OpCode::CMP: return arithmetic(false, [](const auto op_1, const auto op_2, const auto) { return op_1 - op_2; });
-    case OpCode::CMN: return arithmetic(false, [](const auto op_1, const auto op_2, const auto) { return op_1 + op_2; });
+    case OpCode::SUB: return arithmetic(true, true, [](const auto op_1, const auto op_2, const auto) { return op_1 - op_2; });
+    case OpCode::RSB: return arithmetic(true, true, [](const auto op_1, const auto op_2, const auto) { return op_2 - op_1; });
+    case OpCode::ADD: return arithmetic(true, false, [](const auto op_1, const auto op_2, const auto) { return op_1 + op_2; });
+    case OpCode::ADC: return arithmetic(true, false, [](const auto op_1, const auto op_2, const auto c) { return op_1 + op_2 + c; });
+    case OpCode::SBC: return arithmetic(true, true, [](const auto op_1, const auto op_2, const auto c) { return op_1 - op_2 + c - 1; });
+    case OpCode::RSC: return arithmetic(true, true, [](const auto op_1, const auto op_2, const auto c) { return op_2 - op_1 + c - 1; });
+    case OpCode::CMP: return arithmetic(false, true, [](const auto op_1, const auto op_2, const auto) { return op_1 - op_2; });
+    case OpCode::CMN: return arithmetic(false, false, [](const auto op_1, const auto op_2, const auto) { return op_1 + op_2; });
     }
   }
 
-  constexpr void branch(const Instruction instruction) noexcept
+  constexpr void process(const Branch instruction) noexcept
   {
-    if (instruction.test_bit(24)) {
+    if (instruction.link()) {
       // Link bit set, get previous PC
-      registers[14] = PC() - 4;
+      LR() = PC() - 4;
     }
 
-    const auto offset = [](const auto op) -> std::int32_t {
-      if (op.test_bit(23)) {
-        // is signed
-        const auto twos_complement = ((~(op & 0x00FFFFFFF)) + 1) & 0x00FFFFFF;
-        return -static_cast<int32_t>(twos_complement << 2);
-      } else {
-        return static_cast<int32_t>((op & 0x00FFFFFF) << 2);
-      }
-    }(instruction);
-
-    PC() += static_cast<std::uint32_t>(offset + 4);
+    PC() += static_cast<std::uint32_t>(instruction.offset() + 4);
   }
 
-  constexpr void multiply_long(const Multiply_Long val) noexcept
+  constexpr void process(const Multiply_Long val) noexcept
   {
     const auto result = [val, lhs = registers[val.operand_1()], rhs = registers[val.operand_2()]]() {
       if (val.unsigned_mul()) {
@@ -684,17 +722,17 @@ template<std::size_t RAM_Size = 1024> struct System
     PC() += 4;
     if (instruction.unconditional() || check_condition(instruction)) {
       switch (type) {
-      case Instruction_Type::Data_Processing: data_processing(instruction); break;
+      case Instruction_Type::Data_Processing: process(Data_Processing{ instruction }); break;
       case Instruction_Type::MRS: unhandled_instruction("MRS", instruction); break;
       case Instruction_Type::MSR: unhandled_instruction("MSR", instruction); break;
       case Instruction_Type::MSRF: unhandled_instruction("MSR flags", instruction); break;
       case Instruction_Type::Multiply: unhandled_instruction("Multiply", instruction); break;
-      case Instruction_Type::Multiply_Long: multiply_long(instruction); break;
+      case Instruction_Type::Multiply_Long: process(Multiply_Long{ instruction }); break;
       case Instruction_Type::Single_Data_Swap: unhandled_instruction("Single_Data_Swap", instruction); break;
-      case Instruction_Type::Single_Data_Transfer: single_data_transfer(instruction); break;
+      case Instruction_Type::Single_Data_Transfer: process(Single_Data_Transfer{ instruction }); break;
       case Instruction_Type::Undefined: unhandled_instruction("Undefined", instruction); break;
       case Instruction_Type::Block_Data_Transfer: unhandled_instruction("Block_Data_Transfer", instruction); break;
-      case Instruction_Type::Branch: branch(instruction); break;
+      case Instruction_Type::Branch: process(Branch{ instruction }); break;
       case Instruction_Type::Coprocessor_Data_Transfer: unhandled_instruction("Coprocessor_Data_Transfer", instruction); break;
       case Instruction_Type::Coprocessor_Data_Operation: unhandled_instruction("Coprocessor_Data_Operation", instruction); break;
       case Instruction_Type::Coprocessor_Register_Transfer: unhandled_instruction("Coprocessor_Register_Transfer", instruction); break;
@@ -705,7 +743,7 @@ template<std::size_t RAM_Size = 1024> struct System
     // discount prefetch
     // PC() -= 4;
   }
-};  // namespace ARM_Thing
+};
 
 
 }  // namespace ARM_Thing

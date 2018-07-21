@@ -68,7 +68,7 @@ int main(const int argc, const char *argv[])
     constexpr auto FPS = 30;
 
     ImGui::CreateContext();
-    sf::RenderWindow window(sf::VideoMode(640, 480), "ImGui + SFML = <3");
+    sf::RenderWindow window(sf::VideoMode(1024, 768), "ImGui + SFML = <3");
     window.setFramerateLimit(FPS);
     ImGui::SFML::Init(window);
 
@@ -123,7 +123,7 @@ int main(const int argc, const char *argv[])
       ImGui::End();
 
       ImGui::Begin("Registers");
-      ImGui::Text("R0 %04x R1 %04x R2  %04x R3  %04x R4  %04x R5 %04x R6 %04x R7 %04x",
+      ImGui::Text("R0 %08x R1 %08x R2  %08x R3  %08x R4  %08x R5 %08x R6 %08x R7 %08x",
                   sys.registers[0],
                   sys.registers[1],
                   sys.registers[2],
@@ -133,7 +133,7 @@ int main(const int argc, const char *argv[])
                   sys.registers[6],
                   sys.registers[7]);
 
-      ImGui::Text("R8 %04x R9 %04x R10 %04x R11 %04x R12 %04x SP %04x LR %04x PC %04x",
+      ImGui::Text("R8 %08x R9 %08x R10 %08x R11 %08x R12 %08x SP %08x LR %08x PC %08x",
                   sys.registers[8],
                   sys.registers[9],
                   sys.registers[10],
