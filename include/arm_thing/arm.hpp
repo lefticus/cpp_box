@@ -184,7 +184,7 @@ struct Data_Processing : Strongly_Typed<std::uint32_t, Data_Processing>
     return (value >> shift_right) | (value << (32 - shift_right));
   }
 
-  constexpr auto destination_register() const noexcept { return 0b1111 & (m_val >> 12); }
+  [[nodiscard]] constexpr auto destination_register() const noexcept { return 0b1111 & (m_val >> 12); }
 
   [[nodiscard]] constexpr auto operand_1_register() const noexcept { return 0b1111 & (m_val >> 16); }
   [[nodiscard]] constexpr bool set_condition_code() const noexcept { return test_bit(20); }
@@ -391,9 +391,9 @@ template<std::size_t RAM_Size = 1024> struct System
     i_cache.fill_cache(*this);
   }
 
-  constexpr Instruction get_instruction(const std::uint32_t PC) noexcept { return Instruction{ read_word(PC) }; }
+  [[nodiscard]] constexpr auto get_instruction(const std::uint32_t PC) noexcept -> Instruction { return Instruction{ read_word(PC) }; }
 
-  constexpr void setup_run(const std::uint32_t loc)
+  constexpr void setup_run(const std::uint32_t loc) noexcept
   {
     // Set return from call register, so when 'main' returns,
     // we'll be at the end of local RAM
@@ -409,7 +409,7 @@ template<std::size_t RAM_Size = 1024> struct System
     process(ins, type);
   }
 
-  constexpr bool operations_remaining() const noexcept { return PC() != RAM_Size - 4; }
+  [[nodiscard]] constexpr bool operations_remaining() const noexcept { return PC() != RAM_Size - 4; }
 
   struct I_Cache
   {
@@ -465,8 +465,8 @@ template<std::size_t RAM_Size = 1024> struct System
     }
   }
 
-  [[nodiscard]] constexpr std::pair<bool, std::uint32_t>
-    shift_register(const bool c_flag, const Shift_Type type, std::uint32_t shift_amount, std::uint32_t value) const noexcept
+  [[nodiscard]] constexpr auto shift_register(const bool c_flag, const Shift_Type type, std::uint32_t shift_amount, std::uint32_t value) const
+    noexcept -> std::pair<bool, std::uint32_t>
   {
     switch (type) {
     case Shift_Type::Logical_Left:
@@ -572,28 +572,30 @@ template<std::size_t RAM_Size = 1024> struct System
     };
 
     // use 64 bit operations to be able to capture carry
-    const auto arithmetic =
-      [=, &destination, carry = c_flag(), first_operand = static_cast<std::uint64_t>(first_operand), second_operand = static_cast<std::uint64_t>(second_operand)](
-        const bool write, const bool invert_carry, const auto op) {
-        const auto result = op(first_operand, second_operand, carry);
+    const auto arithmetic = [=,
+                             &destination,
+                             carry          = c_flag(),
+                             first_operand  = static_cast<std::uint64_t>(first_operand),
+                             second_operand = static_cast<std::uint64_t>(second_operand)](const bool write, const bool invert_carry, const auto op) {
+      const auto result = op(first_operand, second_operand, carry);
 
-        static_assert(std::is_same_v<std::decay_t<decltype(result)>, std::uint64_t>);
+      static_assert(std::is_same_v<std::decay_t<decltype(result)>, std::uint64_t>);
 
-        if (val.set_condition_code() && destination_register != 15) {
-          z_flag((0xFFFFFFFF & result) == 0);
-          n_flag(result & (1u << 31));
-          const bool carry_result = (result & (1ull << 32)) != 0;
-          c_flag(invert_carry ? !carry_result : carry_result);
+      if (val.set_condition_code() && destination_register != 15) {
+        z_flag((0xFFFFFFFF & result) == 0);
+        n_flag(result & (1u << 31));
+        const bool carry_result = (result & (1ull << 32)) != 0;
+        c_flag(invert_carry ? !carry_result : carry_result);
 
-          const auto first_op_sign  = test_bit(static_cast<std::uint32_t>(first_operand), 31);
-          const auto second_op_sign = test_bit(static_cast<std::uint32_t>(second_operand), 31);
-          const auto result_sign    = test_bit(static_cast<std::uint32_t>(result), 31);
+        const auto first_op_sign  = test_bit(static_cast<std::uint32_t>(first_operand), 31);
+        const auto second_op_sign = test_bit(static_cast<std::uint32_t>(second_operand), 31);
+        const auto result_sign    = test_bit(static_cast<std::uint32_t>(result), 31);
 
-          v_flag((first_op_sign == second_op_sign) && (result_sign != first_op_sign));
-        }
+        v_flag((first_op_sign == second_op_sign) && (result_sign != first_op_sign));
+      }
 
-        if (write) { destination = static_cast<std::uint32_t>(result); }
-      };
+      if (write) { destination = static_cast<std::uint32_t>(result); }
+    };
 
 
     switch (val.get_opcode()) {
