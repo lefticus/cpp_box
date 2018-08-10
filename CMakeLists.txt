@@ -27,6 +27,8 @@ if(CMAKE_COMPILER_IS_GNUCC)
     target_compile_options(project_options INTERFACE -fsanitize=address)
     target_link_libraries(project_options INTERFACE -fsanitize=address)
   endif()
+
+  target_link_libraries(project_options INTERFACE stdc++fs)
 endif()
 
 if(MSVC)
@@ -80,6 +82,9 @@ catch_discover_tests(constexpr_tests)
 
 add_executable(arm_emu src/main.cpp)
 target_link_libraries(arm_emu PRIVATE project_options project_warnings)
+
+add_executable(elf_reader src/elf_reader.cpp)
+target_link_libraries(elf_reader PRIVATE project_options project_warnings)
 
 
 # imgui dependencies

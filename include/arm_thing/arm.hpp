@@ -328,7 +328,7 @@ template<std::size_t RAM_Size = 1024> struct System
 
 
   // read past end of allocated memory will return an unspecified value
-  constexpr std::uint32_t read_word(const std::uint32_t loc) const noexcept
+  [[nodiscard]] constexpr std::uint32_t read_word(const std::uint32_t loc) const noexcept
   {
     const std::uint8_t *data = [&]() -> const std::uint8_t * {
       if (loc + 3 < RAM_Size) { return &builtin_ram[loc]; }
@@ -336,9 +336,6 @@ template<std::size_t RAM_Size = 1024> struct System
     }();
 
     if (data) {
-      // Note: there are more efficient ways to do this with reinterpret_cast
-      // or an intrinsic, but I cannot with constexpr context and I see
-      // no compiler that can optimize around this implementation
       const std::uint32_t byte_1 = data[0];
       const std::uint32_t byte_2 = data[1];
       const std::uint32_t byte_3 = data[2];
