@@ -2,7 +2,7 @@
 #include <cassert>
 #include <iostream>
 
-namespace arm_thing::ELF {
+namespace arm_thing::elf {
 
 // todo, move this into a shared utility location
 template<std::size_t Bytes, typename Data>

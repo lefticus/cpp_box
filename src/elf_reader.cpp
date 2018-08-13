@@ -32,7 +32,7 @@ int main(const int argc, const char *const argv[])
 
   const auto data = read_file(filename);
 
-  const auto file_header = arm_thing::ELF::File_Header({ data.data(), data.size() });
+  const auto file_header = arm_thing::elf::File_Header({ data.data(), data.size() });
 
   std::cout << "is_elf_file: " << file_header.is_elf_file() << '\n';
   std::cout << "program_header_num_entries: " << file_header.program_header_num_entries() << '\n';

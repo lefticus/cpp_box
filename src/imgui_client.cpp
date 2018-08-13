@@ -1,10 +1,12 @@
-#include "arm_thing/arm.hpp"
+#include "../include/arm_thing/arm.hpp"
+#include "../include/arm_thing/elf_reader.hpp"
 #include <cmath>
 #include <string>
 #include <vector>
 #include <fstream>
 #include <iostream>
 #include <iomanip>
+#include <regex>
 
 #include "rang.hpp"
 
@@ -48,7 +50,7 @@ int main(const int argc, const char *argv[])
   if (args.size() == 2) {
     std::cerr << "Attempting to load file: " << args[1] << '\n';
 
-    auto RAM = [&]() {
+    const auto binary = [&]() {
       if (std::ifstream ifs{ args[1], std::ios::binary }; ifs.good()) {
         const auto file_size = ifs.seekg(0, std::ios_base::end).tellg();
         ifs.seekg(0);
@@ -63,8 +65,34 @@ int main(const int argc, const char *argv[])
       }
     }();
 
-    ARM_Thing::System<65536> sys{ RAM };
-    dump_rom(RAM);
+
+    const auto [image, entry_point] = [&]() {
+      if (binary.size() >= 64) {
+        const auto file_header = arm_thing::elf::File_Header({ binary.data(), binary.size() });
+        std::cout << "is_elf_file: " << file_header.is_elf_file() << '\n';
+        if (file_header.is_elf_file()) {
+          const auto string_header   = file_header.section_header(file_header.section_header_string_table_index());
+          const auto sh_string_table = file_header.sh_string_table();
+
+          const auto string_table = file_header.string_table();
+          for (const auto &header : file_header.section_headers()) {
+            for (const auto &symbol_table_entry : header.symbol_table_entries()) {
+              if (symbol_table_entry.name(string_table) == "main") {
+                std::cout << "FOUND MAIN!\n";
+                return std::pair{ file_header.section_header(symbol_table_entry.section_header_table_index()).section_data(),
+                                  symbol_table_entry.value() };
+              }
+            }
+          }
+        }
+      }
+      std::cout << "DIDN'T FIND MAIN! ASSUMING RAW\n";
+      return std::pair{ std::basic_string_view<std::uint8_t>{ binary.data(), binary.size() }, static_cast<std::uint64_t>(0) };
+    }();
+
+
+    arm_thing::System<65536> sys{ image };
+    dump_rom(image);
 
     constexpr auto FPS = 30;
 
@@ -104,6 +132,7 @@ int main(const int argc, const char *argv[])
     std::string bin;
     bin.resize(1024);
 
+    const std::regex strip_attributes{"\\n\\s+\\..*", std::regex::ECMAScript|std::regex::optimize};
 
     while (window.isOpen()) {
       sf::Event event;
@@ -140,7 +169,7 @@ int main(const int argc, const char *argv[])
         if (ImGui::IsItemActive()) { step_one = true; }
 
         ImGui::SameLine();
-        if (ImGui::Button("Reset")) { sys = decltype(sys){ RAM }; }
+        if (ImGui::Button("Reset")) { sys = decltype(sys){ image }; }
         const auto last_scale_factor        = scale_factor;
         const auto last_sprite_scale_factor = sprite_scale_factor;
         ImGui::InputFloat("Zoom", &scale_factor, 0.5f, 0.0f, 1);
@@ -185,38 +214,38 @@ int main(const int argc, const char *argv[])
                     sys.registers[15]);
         ImGui::Text("     NZCV                    IFT     ");
         ImGui::Text("CSPR %i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i",
-                    ARM_Thing::test_bit(sys.CSPR, 31),
-                    ARM_Thing::test_bit(sys.CSPR, 30),
-                    ARM_Thing::test_bit(sys.CSPR, 29),
-                    ARM_Thing::test_bit(sys.CSPR, 28),
-                    ARM_Thing::test_bit(sys.CSPR, 27),
-                    ARM_Thing::test_bit(sys.CSPR, 26),
-                    ARM_Thing::test_bit(sys.CSPR, 25),
-                    ARM_Thing::test_bit(sys.CSPR, 24),
-                    ARM_Thing::test_bit(sys.CSPR, 23),
-                    ARM_Thing::test_bit(sys.CSPR, 22),
-                    ARM_Thing::test_bit(sys.CSPR, 21),
-                    ARM_Thing::test_bit(sys.CSPR, 20),
-                    ARM_Thing::test_bit(sys.CSPR, 19),
-                    ARM_Thing::test_bit(sys.CSPR, 18),
-                    ARM_Thing::test_bit(sys.CSPR, 17),
-                    ARM_Thing::test_bit(sys.CSPR, 16),
-                    ARM_Thing::test_bit(sys.CSPR, 15),
-                    ARM_Thing::test_bit(sys.CSPR, 14),
-                    ARM_Thing::test_bit(sys.CSPR, 13),
-                    ARM_Thing::test_bit(sys.CSPR, 12),
-                    ARM_Thing::test_bit(sys.CSPR, 11),
-                    ARM_Thing::test_bit(sys.CSPR, 10),
-                    ARM_Thing::test_bit(sys.CSPR, 9),
-                    ARM_Thing::test_bit(sys.CSPR, 8),
-                    ARM_Thing::test_bit(sys.CSPR, 7),
-                    ARM_Thing::test_bit(sys.CSPR, 6),
-                    ARM_Thing::test_bit(sys.CSPR, 5),
-                    ARM_Thing::test_bit(sys.CSPR, 4),
-                    ARM_Thing::test_bit(sys.CSPR, 3),
-                    ARM_Thing::test_bit(sys.CSPR, 2),
-                    ARM_Thing::test_bit(sys.CSPR, 1),
-                    ARM_Thing::test_bit(sys.CSPR, 0));
+                    arm_thing::test_bit(sys.CSPR, 31),
+                    arm_thing::test_bit(sys.CSPR, 30),
+                    arm_thing::test_bit(sys.CSPR, 29),
+                    arm_thing::test_bit(sys.CSPR, 28),
+                    arm_thing::test_bit(sys.CSPR, 27),
+                    arm_thing::test_bit(sys.CSPR, 26),
+                    arm_thing::test_bit(sys.CSPR, 25),
+                    arm_thing::test_bit(sys.CSPR, 24),
+                    arm_thing::test_bit(sys.CSPR, 23),
+                    arm_thing::test_bit(sys.CSPR, 22),
+                    arm_thing::test_bit(sys.CSPR, 21),
+                    arm_thing::test_bit(sys.CSPR, 20),
+                    arm_thing::test_bit(sys.CSPR, 19),
+                    arm_thing::test_bit(sys.CSPR, 18),
+                    arm_thing::test_bit(sys.CSPR, 17),
+                    arm_thing::test_bit(sys.CSPR, 16),
+                    arm_thing::test_bit(sys.CSPR, 15),
+                    arm_thing::test_bit(sys.CSPR, 14),
+                    arm_thing::test_bit(sys.CSPR, 13),
+                    arm_thing::test_bit(sys.CSPR, 12),
+                    arm_thing::test_bit(sys.CSPR, 11),
+                    arm_thing::test_bit(sys.CSPR, 10),
+                    arm_thing::test_bit(sys.CSPR, 9),
+                    arm_thing::test_bit(sys.CSPR, 8),
+                    arm_thing::test_bit(sys.CSPR, 7),
+                    arm_thing::test_bit(sys.CSPR, 6),
+                    arm_thing::test_bit(sys.CSPR, 5),
+                    arm_thing::test_bit(sys.CSPR, 4),
+                    arm_thing::test_bit(sys.CSPR, 3),
+                    arm_thing::test_bit(sys.CSPR, 2),
+                    arm_thing::test_bit(sys.CSPR, 1),
+                    arm_thing::test_bit(sys.CSPR, 0));
       }
       ImGui::End();
 
@@ -237,6 +266,7 @@ int main(const int argc, const char *argv[])
               ifs.seekg(0);
               bin.resize(static_cast<std::size_t>(file_size));
               ifs.read(bin.data(), file_size);
+              bin = std::regex_replace(bin, strip_attributes, "");
             }
           }
         }

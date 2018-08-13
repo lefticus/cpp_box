@@ -69,7 +69,7 @@ int main(const int argc, const char *argv[])
       }
     }();
 
-    ARM_Thing::System sys{ RAM };
+    arm_thing::System sys{ RAM };
     dump_rom(RAM);
 
     auto last_registers = sys.registers;
