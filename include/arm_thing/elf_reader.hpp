@@ -2,13 +2,15 @@
 #include <cassert>
 #include <iostream>
 
+// todo: make asserts into aborts if necessary?
+
 namespace arm_thing::elf {
 
 // todo, move this into a shared utility location
 template<std::size_t Bytes, typename Data>
 [[nodiscard]] constexpr auto read_loc(const Data &data, const std::size_t loc, [[maybe_unused]] const bool little_endian) noexcept
 {
-  // to do : assert size is within bounds?
+  // todo : assert size is within bounds?
   if constexpr (Bytes == 1) {
     return static_cast<std::uint8_t>(data[loc]);
   } else if constexpr (Bytes == 2) {
@@ -148,6 +150,7 @@ struct Symbol_Table_Entry
     case Fields::st_info: return bits_32 ? 12 : 4;
     case Fields::st_other: return bits_32 ? 13 : 5;
     case Fields::st_shndx: return bits_32 ? 14 : 6;
+    default: assert(false);
     }
   }
 
@@ -160,6 +163,7 @@ struct Symbol_Table_Entry
     case Fields::st_info: return 1;
     case Fields::st_other: return 1;
     case Fields::st_shndx: return 2;
+    default: assert(false);
     }
   }
 
@@ -186,6 +190,7 @@ struct Symbol_Table_Entry
     case 2: return read_loc<2>(data, offset(field), little_endian);
     case 4: return read_loc<4>(data, offset(field), little_endian);
     case 8: return read_loc<8>(data, offset(field), little_endian);
+    default: assert(false);
     }
   }
 };
@@ -260,6 +265,7 @@ struct Section_Header
     case Fields::sh_info: return bits_32 ? 0x1C : 0x2C;
     case Fields::sh_addralign: return bits_32 ? 0x20 : 0x30;
     case Fields::sh_entsize: return bits_32 ? 0x24 : 0x38;
+    default: assert(false);
     }
   }
 
@@ -276,6 +282,7 @@ struct Section_Header
     case Fields::sh_info: return 4;
     case Fields::sh_addralign: return bits_32 ? 4 : 8;
     case Fields::sh_entsize: return bits_32 ? 4 : 8;
+    default: assert(false);
     }
   }
 
@@ -327,6 +334,7 @@ struct Section_Header
     case 2: return read_loc<2>(data, offset(field), little_endian);
     case 4: return read_loc<4>(data, offset(field), little_endian);
     case 8: return read_loc<8>(data, offset(field), little_endian);
+    default: assert(false);
     }
   }
 
@@ -413,6 +421,7 @@ struct File_Header
     case Fields::e_shentsize: return bits_32() ? 0x2E : 0x3A;
     case Fields::e_shnum: return bits_32() ? 0x30 : 0x3C;
     case Fields::e_shstrndx: return bits_32() ? 0x32 : 0x3E;
+    default: assert(false);
     }
   }
 
@@ -443,6 +452,7 @@ struct File_Header
     case Fields::e_shentsize: return 2;
     case Fields::e_shnum: return 2;
     case Fields::e_shstrndx: return 2;
+    default: assert(false);
     }
   }
 
@@ -549,7 +559,7 @@ struct File_Header
     switch (multibyte_data()) {
     case Data::little_endian: return true;
     case Data::big_endian: return false;
-    default: assert("Unknown endianness");
+    default: assert(false);
     }
   }
 
@@ -558,7 +568,7 @@ struct File_Header
     switch (bit_class()) {
     case Class::bits_32: return true;
     case Class::bits_64: return false;
-    default: assert("Unknown bits");
+    default: assert(false);
     }
   }
 
@@ -678,7 +688,6 @@ struct File_Header
       }
     }
 
-    //assert(false);
   }
 
 
@@ -689,6 +698,7 @@ struct File_Header
     case 2: return read_loc<2>(data, offset(field), little_endian());
     case 4: return read_loc<4>(data, offset(field), little_endian());
     case 8: return read_loc<8>(data, offset(field), little_endian());
+    default: assert(false);
     }
   }
 };

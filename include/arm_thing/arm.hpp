@@ -699,6 +699,8 @@ template<std::size_t RAM_Size = 1024> struct System
     case Condition::NV:  // Reserved
       return false;
     };
+
+    return false;
   }
 
   // make this constexpr static and it gets initialized exactly once, no question
