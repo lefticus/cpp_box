@@ -23,11 +23,19 @@ template<std::size_t Idx, typename F, typename V> constexpr decltype(auto) simpl
   }
 }
 
+// Variation of the naive way: only loops as many times as there are set bits.
+template<typename T>[[nodiscard]] constexpr T popcnt(T v) noexcept
+{
+  T c{ 0 };
+  for (; v; ++c) { v &= v - 1; }
+  return c;
+}
+
+
 template<typename F, typename V> constexpr decltype(auto) simple_visit(F &&f, V &&t)
 {
   return (simple_visit_impl<0>(std::forward<F>(f), std::forward<V>(t)));
 }
-
 
 template<typename Value, typename Bit>[[nodiscard]] constexpr bool test_bit(const Value val, const Bit bit) noexcept
 {
@@ -103,6 +111,7 @@ struct Instruction : Strongly_Typed<std::uint32_t, Instruction>
   friend struct Single_Data_Transfer;
   friend struct Multiply_Long;
   friend struct Branch;
+  friend struct Load_And_Store_Multiple;
 };
 
 struct Single_Data_Transfer : Strongly_Typed<std::uint32_t, Single_Data_Transfer>
@@ -123,6 +132,20 @@ struct Single_Data_Transfer : Strongly_Typed<std::uint32_t, Single_Data_Transfer
   [[nodiscard]] constexpr auto offset_shift_amount() const noexcept { return offset_shift() >> 4; }
 
   constexpr explicit Single_Data_Transfer(Instruction ins) noexcept : Strongly_Typed{ ins.m_val } {}
+};
+
+struct Load_And_Store_Multiple : Strongly_Typed<std::uint32_t, Load_And_Store_Multiple>
+{
+  [[nodiscard]] constexpr bool pre_indexing() const noexcept { return test_bit(24); }
+  [[nodiscard]] constexpr bool up_indexing() const noexcept { return test_bit(23); }
+  [[nodiscard]] constexpr bool psr() const noexcept { return test_bit(22); }
+  [[nodiscard]] constexpr bool write_back() const noexcept { return test_bit(21); }
+  [[nodiscard]] constexpr bool load() const noexcept { return test_bit(20); }
+
+  [[nodiscard]] constexpr auto base_register() const noexcept { return (m_val >> 16) & 0b1111; }
+  [[nodiscard]] constexpr auto register_list() const noexcept -> std::uint16_t { return m_val & 0xFFFF; }
+
+  constexpr explicit Load_And_Store_Multiple(Instruction ins) noexcept : Strongly_Typed{ ins.m_val } {}
 };
 
 struct Multiply_Long : Strongly_Typed<std::uint32_t, Multiply_Long>
@@ -210,7 +233,8 @@ enum class Instruction_Type {
   Coprocessor_Data_Transfer,
   Coprocessor_Data_Operation,
   Coprocessor_Register_Transfer,
-  Software_Interrupt
+  Software_Interrupt,
+  Load_And_Store_Multiple
 };
 
 
@@ -242,7 +266,7 @@ enum class Instruction_Type {
   };
 
   // ARMv3  http://netwinder.osuosl.org/pub/netwinder/docs/arm/ARM7500FEvB_3.pdf
-  std::array<std::tuple<std::uint32_t, std::uint32_t, Instruction_Type>, 15> table{
+  std::array<std::tuple<std::uint32_t, std::uint32_t, Instruction_Type>, 16> table{
     { { 0b0000'1100'0000'0000'0000'0000'0000'0000, 0b0000'0000'0000'0000'0000'0000'0000'0000, Instruction_Type::Data_Processing },
       { 0b0000'1111'1011'1111'0000'1111'1111'1111, 0b0000'0001'0000'1111'0000'1111'1111'1111, Instruction_Type::MRS },
       { 0b0000'1111'1011'1111'1111'1111'1111'0000, 0b0000'0001'0010'1001'1111'0000'0000'0000, Instruction_Type::MSR },
@@ -257,7 +281,8 @@ enum class Instruction_Type {
       { 0b0000'1110'0000'0000'0000'0000'1111'0000, 0b0000'1100'0010'0000'0000'0000'0000'0000, Instruction_Type::Coprocessor_Data_Transfer },
       { 0b0000'1111'0000'0000'0000'0000'0001'0000, 0b0000'1110'0000'0000'0000'0000'0000'0000, Instruction_Type::Coprocessor_Data_Operation },
       { 0b0000'1111'0000'0000'0000'0000'0001'0000, 0b0000'1110'0000'0000'0000'0000'0001'0000, Instruction_Type::Coprocessor_Register_Transfer },
-      { 0b0000'1111'0000'0000'0000'0000'0000'0000, 0b0000'1111'0000'0000'0000'0000'0000'0000, Instruction_Type::Software_Interrupt } }
+      { 0b0000'1111'0000'0000'0000'0000'0000'0000, 0b0000'1111'0000'0000'0000'0000'0000'0000, Instruction_Type::Software_Interrupt },
+      { 0b0000'1110'0000'0000'0000'0000'0000'0000, 0b0000'1000'0000'0000'0000'0000'0000'0000, Instruction_Type::Load_And_Store_Multiple } },
   };
 
   // Order from most restrictive to least restrictive
@@ -276,6 +301,9 @@ template<std::size_t RAM_Size = 1024> struct System
 
   std::array<std::uint32_t, 16> registers{};
   bool invalid_memory_write{ false };
+
+  [[nodiscard]] constexpr auto &SP() noexcept { return registers[13]; }
+  [[nodiscard]] constexpr const auto &SP() const noexcept { return registers[13]; }
 
   [[nodiscard]] constexpr auto &LR() noexcept { return registers[14]; }
   [[nodiscard]] constexpr const auto &LR() const noexcept { return registers[14]; }
@@ -301,10 +329,7 @@ template<std::size_t RAM_Size = 1024> struct System
 
   std::array<std::uint8_t, RAM_Size> builtin_ram{};
 
-  constexpr void unhandled_instruction([[maybe_unused]] const std::string_view description, [[maybe_unused]] const Instruction ins)
-  {
-    std::terminate();
-  }
+  constexpr void unhandled_instruction([[maybe_unused]] const Instruction ins, [[maybe_unused]] const Instruction_Type type) { abort(); }
 
 
   // read past end of allocated memory will return an unspecified value
@@ -396,6 +421,7 @@ template<std::size_t RAM_Size = 1024> struct System
     // we'll be at the end of local RAM
     registers[14] = RAM_Size - 4;
     PC()          = loc + 4;
+    SP()          = 0x8000;
   }
 
   template<typename Tracer = void (*)(const System &, std::uint32_t, Instruction)>
@@ -503,6 +529,49 @@ template<std::size_t RAM_Size = 1024> struct System
       const auto shift_amount = get_second_operand_shift_amount(val);
       return shift_register(c_flag(), val.operand_2_shift_type(), shift_amount, registers[val.operand_2_register()]);
     }
+  }
+
+
+  constexpr void process(const Load_And_Store_Multiple val) noexcept
+  {
+    const auto register_list        = val.register_list();
+    const auto bits_set             = popcnt(register_list);
+
+    auto [start_address, index_amount] = [&]() -> std::pair<std::uint32_t, std::int32_t> {
+      if (val.pre_indexing() && val.up_indexing()) {
+        // increment before
+        return { registers[val.base_register()] + 4, 4 };
+      } else if (!val.pre_indexing() && val.up_indexing()) {
+        // increment after
+        return { registers[val.base_register()], 4 };
+      } else if (val.pre_indexing() && !val.up_indexing()) {
+        // decrement before
+        return { registers[val.base_register()] - (bits_set * 4), -4 };
+      } else {
+        // decrement after
+        return { registers[val.base_register()] - (bits_set * 4) + 4, -4 };
+      }
+    }();
+
+    const auto load = val.load();
+
+    if (val.psr()) {
+      abort();  // cannot handle PSR
+    }
+
+
+    for (int i = 0; i < 16; ++i) {
+      if (test_bit(register_list, i)) {
+        if (load) {
+          registers[i] = read_word(start_address);
+        } else {
+          write_word(start_address, registers[i]);
+        }
+        start_address += index_amount;
+      }
+    }
+
+    if (val.write_back()) { registers[val.base_register()] += bits_set * index_amount; }
   }
 
   constexpr auto offset(const Single_Data_Transfer val) const noexcept
@@ -619,8 +688,8 @@ template<std::size_t RAM_Size = 1024> struct System
   constexpr void process(const Branch instruction) noexcept
   {
     if (instruction.link()) {
-      // Link bit set, get previous PC
-      LR() = PC() - 4;
+      // Link bit set, get PC, which is already pointing at the next instruction
+      LR() = PC();
     }
 
     PC() += static_cast<std::uint32_t>(instruction.offset() + 4);
@@ -724,20 +793,21 @@ template<std::size_t RAM_Size = 1024> struct System
     if (instruction.unconditional() || check_condition(instruction)) {
       switch (type) {
       case Instruction_Type::Data_Processing: process(Data_Processing{ instruction }); break;
-      case Instruction_Type::MRS: unhandled_instruction("MRS", instruction); break;
-      case Instruction_Type::MSR: unhandled_instruction("MSR", instruction); break;
-      case Instruction_Type::MSRF: unhandled_instruction("MSR flags", instruction); break;
-      case Instruction_Type::Multiply: unhandled_instruction("Multiply", instruction); break;
       case Instruction_Type::Multiply_Long: process(Multiply_Long{ instruction }); break;
-      case Instruction_Type::Single_Data_Swap: unhandled_instruction("Single_Data_Swap", instruction); break;
       case Instruction_Type::Single_Data_Transfer: process(Single_Data_Transfer{ instruction }); break;
-      case Instruction_Type::Undefined: unhandled_instruction("Undefined", instruction); break;
-      case Instruction_Type::Block_Data_Transfer: unhandled_instruction("Block_Data_Transfer", instruction); break;
       case Instruction_Type::Branch: process(Branch{ instruction }); break;
-      case Instruction_Type::Coprocessor_Data_Transfer: unhandled_instruction("Coprocessor_Data_Transfer", instruction); break;
-      case Instruction_Type::Coprocessor_Data_Operation: unhandled_instruction("Coprocessor_Data_Operation", instruction); break;
-      case Instruction_Type::Coprocessor_Register_Transfer: unhandled_instruction("Coprocessor_Register_Transfer", instruction); break;
-      case Instruction_Type::Software_Interrupt: unhandled_instruction("Software_Interrupt", instruction); break;
+      case Instruction_Type::Load_And_Store_Multiple: process(Load_And_Store_Multiple{ instruction }); break;
+      case Instruction_Type::MRS:
+      case Instruction_Type::MSR:
+      case Instruction_Type::MSRF:
+      case Instruction_Type::Multiply:
+      case Instruction_Type::Single_Data_Swap:
+      case Instruction_Type::Undefined:
+      case Instruction_Type::Block_Data_Transfer:
+      case Instruction_Type::Coprocessor_Data_Transfer:
+      case Instruction_Type::Coprocessor_Data_Operation:
+      case Instruction_Type::Coprocessor_Register_Transfer:
+      case Instruction_Type::Software_Interrupt: unhandled_instruction(instruction, type); break;
       }
     }
 
