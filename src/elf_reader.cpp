@@ -49,8 +49,9 @@ int main(const int argc, const char *const argv[])
 
   std::cout << "Iterating Tables\n";
   const auto string_table = file_header.string_table();
+
   for (const auto &header : file_header.section_headers()) {
-    std::cout << "  table name: " << header.name(sh_string_table) << " offset: " << header.offset() << " size: " << header.size()
+    std::cout << "  table name: " << header.name(sh_string_table) << " offset: " << header.offset() << " size: " << header.size() << " type: " << static_cast<int>(header.type())
               << " num symbol entries: " << header.symbol_table_num_entries() << '\n';
 
     for (const auto &symbol_table_entry : header.symbol_table_entries()) {
@@ -60,5 +61,12 @@ int main(const int argc, const char *const argv[])
         std::cout << "FOUND MAIN!\n";
       }
     }
+
+    std::cout << "  relocation entries: " << header.relocation_table_num_entries() << '\n';
+
+    for (const auto &relocation_table_entry : header.relocation_table_entries()) {
+      std::cout << "    file_offset: " << relocation_table_entry.file_offset() << " symbol: " << relocation_table_entry.symbol() << " symbol name: " << file_header.symbol_table().symbol_table_entry(relocation_table_entry.symbol()).name(string_table)  << '\n';
+    }
+
   }
 }

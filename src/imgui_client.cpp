@@ -70,12 +70,64 @@ struct Loaded_Files
   std::uint32_t entry_point{};
 };
 
+void resolve_symbols(std::vector<std::uint8_t> &data, arm_thing::elf::File_Header file_header)
+{
+  const auto sh_string_table  = file_header.sh_string_table();
+  const auto string_table     = file_header.string_table();
+  const auto symbol_table     = file_header.symbol_table();
+  const auto relocation_table = [&]() {
+    for (const auto &section_header : file_header.section_headers()) {
+      if (section_header.type() == arm_thing::elf::Section_Header::Types::SHT_REL && section_header.name(sh_string_table) == ".rel.text") {
+        return section_header;
+      }
+    }
+    // no relocation table, nothing to do... how to proceed?
+    abort();
+  }();
+
+  const auto text_offset = [&]() {
+    for (const auto &section_header : file_header.section_headers()) {
+      if (section_header.type() == arm_thing::elf::Section_Header::Types::SHT_PROGBITS && section_header.name(sh_string_table) == ".text") {
+        return section_header.offset();
+      }
+    }
+    abort();
+  }();
+
+  for (const auto &relocation : relocation_table.relocation_table_entries()) {
+    
+    const auto from = relocation.file_offset() + text_offset;
+    const auto to   = symbol_table.symbol_table_entry(relocation.symbol()).value() + symbol_table.symbol_table_entry(relocation.symbol())
+    std::cout << "attempting relocation: " << from << " Needs to point to: " << to << " offset: " << static_cast<std::int32_t>(to - from) << '\n';
+
+    const auto value = static_cast<std::uint32_t>(data[from]) | (static_cast<std::uint32_t>(data[from + 1]) << 8)
+                       | (static_cast<std::uint32_t>(data[from + 2]) << 16) | (static_cast<std::uint32_t>(data[from + 3]) << 24);
+
+    std::cout << "Instruction: " << std::hex << value << '\n';
+    std::cout << "distance / 2: " << std::hex << (static_cast<std::int32_t>(to - from) >> 2) << '\n';
+    std::cout << "adjusted for PC: " << std::hex << (static_cast<std::int32_t>(to - from) >> 2) - 2 << '\n';
+
+    if (arm_thing::System<>::decode(arm_thing::Instruction{ value }) == arm_thing::Instruction_Type::Branch) {
+      const auto new_value = (value & 0xFF000000) | (((static_cast<std::int32_t>(to - from) >> 2) - 2) & 0x00FFFFFF);
+      std::cout << "New instruction: " << std::hex << new_value << '\n';
+      data[from] = new_value;
+      data[from+1] = (new_value >> 8);
+      data[from+2] = (new_value >> 16);
+      data[from+3] = (new_value >> 24);
+    } else if (value == 0) {
+      std::cout << "0, nothing to link\n";
+    } else {
+      abort();
+    }
+  }
+}
+
 Loaded_Files load_unknown(const std::filesystem::path &t_path)
 {
   auto data = std::make_unique<std::vector<std::uint8_t>>(read_file(t_path));
 
   if (data->size() >= 64) {
-    const auto file_header = arm_thing::elf::File_Header({ data->data(), data->size() });
+    const auto file_header = arm_thing::elf::File_Header{ { data->data(), data->size() } };
     std::cout << "is_elf_file: " << file_header.is_elf_file() << '\n';
     if (file_header.is_elf_file()) {
       const auto string_header   = file_header.section_header(file_header.section_header_string_table_index());
@@ -85,6 +137,7 @@ Loaded_Files load_unknown(const std::filesystem::path &t_path)
       for (const auto &header : file_header.section_headers()) {
         for (const auto &symbol_table_entry : header.symbol_table_entries()) {
           if (symbol_table_entry.name(string_table) == "main") {
+            resolve_symbols(*data, file_header);
             std::cout << "FOUND MAIN!\n";
             return Loaded_Files{ "",
                                  "",
@@ -105,22 +158,26 @@ Loaded_Files load_unknown(const std::filesystem::path &t_path)
 
 Loaded_Files compile(const std::string &t_str)
 {
+  // todo: proper temp directory and name output
   if (std::ofstream ofs("/tmp/src.cpp"); ofs.good()) {
     ofs.write(t_str.data(), t_str.find('\0'));
     ofs.flush();
   }
 
-  system("/usr/local/bin/clang++ /tmp/src.cpp -S -o /tmp/src.asm -O3 -mllvm --x86-asm-syntax=intel --target=armv4-linux -stdlib=libc++");
+  system("/usr/local/bin/clang++ -std=c++2a /tmp/src.cpp -S -o /tmp/src.asm -O1 -mllvm --x86-asm-syntax=intel --target=armv4-linux -stdlib=libc++");
   const auto assembly = read_file("/tmp/src.asm");
 
 
   // get object file
-  system("/usr/local/bin/clang++ /tmp/src.cpp -c -o /tmp/src.o -O3 --target=armv4-linux -stdlib=libc++");
+  system("/usr/local/bin/clang++ -std=c++2a /tmp/src.cpp -c -o /tmp/src.o -O1 --target=armv4-linux -stdlib=libc++");
   auto loaded = load_unknown("/tmp/src.o");
 
   const std::regex strip_attributes{ "\\n\\s+\\..*", std::regex::ECMAScript };
+
+  dump_rom(loaded.image);
+
   return Loaded_Files{ t_str,
-                       std::regex_replace(std::string{assembly.begin(), assembly.end()}, strip_attributes, ""),
+                       std::regex_replace(std::string{ assembly.begin(), assembly.end() }, strip_attributes, ""),
                        std::move(loaded.binary_file),
                        loaded.image,
                        static_cast<std::uint32_t>(loaded.entry_point) };
@@ -134,7 +191,7 @@ int main(const int argc, const char *argv[])
 
   if (args.size() == 2) { loaded_files = load_unknown(args[1]); }
 
-  arm_thing::System<65536> sys{ loaded_files.image };
+  arm_thing::System<1024 * 1024> sys{ loaded_files.image };
   //    dump_rom(Loaded_Files.image);
 
   constexpr auto FPS = 30;
@@ -144,21 +201,21 @@ int main(const int argc, const char *argv[])
 
 
   ImGui::CreateContext();
-  sf::RenderWindow window(sf::VideoMode(1024, 768), "ImGui + SFML = <3");
+  sf::RenderWindow window(sf::VideoMode(1024, 768), "ARM Thing");
   window.setFramerateLimit(FPS);
 
 
   ImGui::SFML::Init(window);
 
   sf::Texture texture;
-  if (!texture.create(100, 100)) return -1;
+  if (!texture.create(256, 256)) return -1;
 
-//  texture.create(255,100);
+  //  texture.create(255,100);
   // Create a sprite that will display the texture
   sf::Sprite sprite(texture);
   sf::Clock framerateClock;
   sf::Clock deltaClock;
-  constexpr const auto opsPerFrame = 5000000 / FPS;
+  constexpr const auto opsPerFrame = 50000000 / FPS;
 
   auto rescale_display = [&](const auto last_scale_factor) {
     ImGui::GetStyle().ScaleAllSizes(scale_factor / last_scale_factor);
@@ -175,7 +232,7 @@ int main(const int argc, const char *argv[])
   bool compile_needed = true;
 
   while (window.isOpen()) {
-    if (future_compiler_output.valid() && future_compiler_output.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready)  {
+    if (future_compiler_output.valid() && future_compiler_output.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready) {
       loaded_files = future_compiler_output.get();
     }
 
@@ -193,11 +250,10 @@ int main(const int argc, const char *argv[])
       step_one = false;
     }
 
-    texture.update(&sys.builtin_ram[0x4000]);
-
 
     ImGui::SFML::Update(window, deltaClock.restart());
 
+    texture.update(&sys.builtin_ram[0x10000]);
 
     ImGui::Begin("Controls", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
     {
@@ -213,7 +269,10 @@ int main(const int argc, const char *argv[])
       if (ImGui::IsItemActive()) { step_one = true; }
 
       ImGui::SameLine();
-      if (ImGui::Button("Reset")) { sys = decltype(sys){ loaded_files.image }; }
+      if (ImGui::Button("Reset")) {
+        sys = decltype(sys){ loaded_files.image };
+        sys.setup_run(loaded_files.entry_point);
+      }
 
       const auto last_scale_factor        = scale_factor;
       const auto last_sprite_scale_factor = sprite_scale_factor;
@@ -298,7 +357,7 @@ int main(const int argc, const char *argv[])
     ImGui::Begin("C++");
     {
       const auto available = ImGui::GetContentRegionAvail();
-      if (loaded_files.src.size() < 1024) { loaded_files.src.resize(1024); }
+      if (loaded_files.src.size() - strlen(loaded_files.src.c_str()) < 256) { loaded_files.src.resize(loaded_files.src.size() + 512); }
       ImGui::BeginChild("Code", { available.x * 5 / 8, available.y });
       {
         if (ImGui::InputTextMultiline("", loaded_files.src.data(), loaded_files.src.size(), ImGui::GetContentRegionAvail())) {
@@ -307,7 +366,7 @@ int main(const int argc, const char *argv[])
 
         if (compile_needed && !future_compiler_output.valid()) {
           future_compiler_output = std::async(std::launch::async, compile, std::string(loaded_files.src));
-          compile_needed = false;
+          compile_needed         = false;
         }
       }
       ImGui::EndChild();

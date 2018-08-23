@@ -78,6 +78,84 @@ template<typename Getter>[[nodiscard]] constexpr auto make_iterator(Getter t_get
 }
 
 
+struct Relocation_Entry
+{
+  enum class Fields { file_offset, info };
+
+  bool bits_32       = true;
+  bool little_endian = true;
+  std::basic_string_view<std::uint8_t> full_data;
+  std::basic_string_view<std::uint8_t> data;
+
+  constexpr Relocation_Entry(const bool t_bits_32,
+                             const bool t_little_endian,
+                             const std::basic_string_view<std::uint8_t> t_full_data,
+                             const std::basic_string_view<std::uint8_t> t_data) noexcept
+    : bits_32{ t_bits_32 }, little_endian{ t_little_endian }, full_data{ t_full_data }, data{ t_data }
+  {
+  }
+
+  [[nodiscard]] constexpr static auto entry_size(const bool t_bits_32) noexcept -> std::size_t
+  {
+    if (t_bits_32) {
+      return 8;
+    } else {
+      return 16;
+    }
+  }
+
+  [[nodiscard]] constexpr auto offset(const Fields field) const noexcept -> std::size_t
+  {
+    switch (field) {
+    case Fields::file_offset: return 0;
+    case Fields::info: return bits_32 ? 4 : 8;
+    default: assert(false);
+    }
+  }
+
+  [[nodiscard]] constexpr auto size(const Fields field) const noexcept
+  {
+    switch (field) {
+    case Fields::file_offset: return bits_32 ? 4 : 8;
+    case Fields::info: return bits_32 ? 4 : 8;
+    default: assert(false);
+    }
+  }
+
+  [[nodiscard]] constexpr auto read(const Fields field) const noexcept -> std::uint64_t
+  {
+    switch (size(field)) {
+    case 1: return read_loc<1>(data, offset(field), true);
+    case 2: return read_loc<2>(data, offset(field), little_endian);
+    case 4: return read_loc<4>(data, offset(field), little_endian);
+    case 8: return read_loc<8>(data, offset(field), little_endian);
+    default: assert(false);
+    }
+  }
+
+  [[nodiscard]] constexpr auto file_offset() const noexcept { return read(Fields::file_offset); }
+  [[nodiscard]] constexpr auto info() const noexcept { return read(Fields::info); }
+
+  [[nodiscard]] constexpr auto symbol() const noexcept
+  {
+    if (bits_32) {
+      return read(Fields::info) >> 8;
+    } else {
+      return read(Fields::info) >> 32;
+    }
+  }
+
+  [[nodiscard]] constexpr auto type() const noexcept
+  {
+    if (bits_32) {
+      return read(Fields::info) & 0xff;
+    } else {
+      return read(Fields::info) & 0xFFFFFFFF;
+    }
+  }
+};
+
+
 // https://docs.oracle.com/cd/E23824_01/html/819-0690/chapter6-79797.html#chapter6-tbl-23
 struct Symbol_Table_Entry
 {
@@ -132,6 +210,7 @@ struct Symbol_Table_Entry
       return 24;
     }
   }
+
 
   constexpr Symbol_Table_Entry(const bool t_bits_32,
                                const bool t_little_endian,
@@ -340,6 +419,27 @@ struct Section_Header
 
   [[nodiscard]] constexpr auto section_data() const noexcept -> std::basic_string_view<std::uint8_t> { return full_data.substr(offset(), size()); }
 
+
+  [[nodiscard]] constexpr auto relocation_table_num_entries() const noexcept -> std::size_t
+  {
+    if (type() == Types::SHT_REL) {
+      return size() / Relocation_Entry::entry_size(bits_32);
+    } else {
+      return 0;
+    }
+  }
+
+  [[nodiscard]] constexpr auto relocation_table_entry(const std::size_t index) const noexcept -> Relocation_Entry
+  {
+    const auto size = Relocation_Entry::entry_size(bits_32);
+    return Relocation_Entry{ bits_32, little_endian, full_data, section_data().substr(size * index, size) };
+  }
+
+  [[nodiscard]] constexpr auto relocation_table_entries() const noexcept
+  {
+    return make_iterator([this](const std::size_t idx) { return relocation_table_entry(idx); }, relocation_table_num_entries());
+  }
+
   [[nodiscard]] constexpr auto symbol_table_num_entries() const noexcept -> std::size_t
   {
     if (type() == Types::SHT_SYMTAB) {
@@ -359,9 +459,6 @@ struct Section_Header
   {
     return make_iterator([this](const std::size_t idx) { return symbol_table_entry(idx); }, symbol_table_num_entries());
   }
-
-
-
 };
 
 struct File_Header
@@ -671,7 +768,6 @@ struct File_Header
   }
 
 
-
   [[nodiscard]] constexpr auto section_headers() const noexcept
   {
     return make_iterator([this](const std::size_t idx) { return section_header(idx); }, section_header_num_entries());
@@ -687,7 +783,14 @@ struct File_Header
         return std::string_view{ reinterpret_cast<const char *>(string_data.data()), string_data.size() };
       }
     }
+  }
 
+  [[nodiscard]] constexpr auto symbol_table() const noexcept {
+    for (const auto &section_header : section_headers()) {
+      if (section_header.symbol_table_num_entries() != 0) {
+        return section_header;
+      }
+    }
   }
 
 
@@ -702,4 +805,4 @@ struct File_Header
     }
   }
 };
-}  // namespace arm_thing::ELF
+}  // namespace arm_thing::elf

@@ -292,6 +292,8 @@ TEST_CASE("Test arbitrary movs")
   REQUIRE(static_test<system.registers[1] == 12>());
 }
 
+
+
 TEST_CASE("Test arbitrary code")
 {
 
