@@ -70,54 +70,57 @@ struct Loaded_Files
   std::uint32_t entry_point{};
 };
 
+// todo: move loader into more reusable place
 void resolve_symbols(std::vector<std::uint8_t> &data, arm_thing::elf::File_Header file_header)
 {
-  const auto sh_string_table  = file_header.sh_string_table();
-  const auto string_table     = file_header.string_table();
-  const auto symbol_table     = file_header.symbol_table();
-  const auto relocation_table = [&]() {
-    for (const auto &section_header : file_header.section_headers()) {
-      if (section_header.type() == arm_thing::elf::Section_Header::Types::SHT_REL && section_header.name(sh_string_table) == ".rel.text") {
-        return section_header;
+  const auto sh_string_table = file_header.sh_string_table();
+  const auto string_table    = file_header.string_table();
+  const auto symbol_table    = file_header.symbol_table();
+
+
+  for (const auto &section_header : file_header.section_headers()) {
+    if (section_header.type() == arm_thing::elf::Section_Header::Types::SHT_REL && section_header.name(sh_string_table) == ".rel.text") {
+      const auto source_section = [&]() {
+        const auto section_name_to_find = section_header.name(sh_string_table).substr(4);
+
+        std::cout << "looking for section: '" << section_name_to_find << "'\n";
+        for (const auto &section : file_header.section_headers()) {
+          if (section.name(sh_string_table) == section_name_to_find) { return section; }
+        }
+
+        abort();
+      }();
+
+      // is a relocation section
+      for (const auto &relocation : section_header.relocation_table_entries()) {
+        const auto symbol         = symbol_table.symbol_table_entry(relocation.symbol());
+        const auto target_section = file_header.section_header(symbol.section_header_table_index());
+        const auto from           = relocation.file_offset() + source_section.offset();
+        const auto to             = symbol.value() + target_section.offset();
+
+        std::cout << std::dec << "attempting relocation: " << from << " Needs to point to: " << to
+                  << " offset: " << static_cast<std::int32_t>(to - from) << '\n';
+
+        const auto value = static_cast<std::uint32_t>(data[from]) | (static_cast<std::uint32_t>(data[from + 1]) << 8)
+                           | (static_cast<std::uint32_t>(data[from + 2]) << 16) | (static_cast<std::uint32_t>(data[from + 3]) << 24);
+
+        std::cout << "Instruction: " << std::hex << value << '\n';
+        std::cout << "distance / 2: " << std::hex << (static_cast<std::int32_t>(to - from) >> 2) << '\n';
+        std::cout << "adjusted for PC: " << std::hex << (static_cast<std::int32_t>(to - from) >> 2) - 2 << '\n';
+
+        if (arm_thing::System<>::decode(arm_thing::Instruction{ value }) == arm_thing::Instruction_Type::Branch) {
+          const auto new_value = (value & 0xFF000000) | (((static_cast<std::int32_t>(to - from) >> 2) - 2) & 0x00FFFFFF);
+          std::cout << "New instruction: " << std::hex << new_value << '\n';
+          data[from]     = new_value;
+          data[from + 1] = (new_value >> 8);
+          data[from + 2] = (new_value >> 16);
+          data[from + 3] = (new_value >> 24);
+        } else if (value == 0) {
+          std::cout << "0, nothing to link\n";
+        } else {
+          abort();
+        }
       }
-    }
-    // no relocation table, nothing to do... how to proceed?
-    abort();
-  }();
-
-  const auto text_offset = [&]() {
-    for (const auto &section_header : file_header.section_headers()) {
-      if (section_header.type() == arm_thing::elf::Section_Header::Types::SHT_PROGBITS && section_header.name(sh_string_table) == ".text") {
-        return section_header.offset();
-      }
-    }
-    abort();
-  }();
-
-  for (const auto &relocation : relocation_table.relocation_table_entries()) {
-    
-    const auto from = relocation.file_offset() + text_offset;
-    const auto to   = symbol_table.symbol_table_entry(relocation.symbol()).value() + symbol_table.symbol_table_entry(relocation.symbol())
-    std::cout << "attempting relocation: " << from << " Needs to point to: " << to << " offset: " << static_cast<std::int32_t>(to - from) << '\n';
-
-    const auto value = static_cast<std::uint32_t>(data[from]) | (static_cast<std::uint32_t>(data[from + 1]) << 8)
-                       | (static_cast<std::uint32_t>(data[from + 2]) << 16) | (static_cast<std::uint32_t>(data[from + 3]) << 24);
-
-    std::cout << "Instruction: " << std::hex << value << '\n';
-    std::cout << "distance / 2: " << std::hex << (static_cast<std::int32_t>(to - from) >> 2) << '\n';
-    std::cout << "adjusted for PC: " << std::hex << (static_cast<std::int32_t>(to - from) >> 2) - 2 << '\n';
-
-    if (arm_thing::System<>::decode(arm_thing::Instruction{ value }) == arm_thing::Instruction_Type::Branch) {
-      const auto new_value = (value & 0xFF000000) | (((static_cast<std::int32_t>(to - from) >> 2) - 2) & 0x00FFFFFF);
-      std::cout << "New instruction: " << std::hex << new_value << '\n';
-      data[from] = new_value;
-      data[from+1] = (new_value >> 8);
-      data[from+2] = (new_value >> 16);
-      data[from+3] = (new_value >> 24);
-    } else if (value == 0) {
-      std::cout << "0, nothing to link\n";
-    } else {
-      abort();
     }
   }
 }
@@ -138,12 +141,14 @@ Loaded_Files load_unknown(const std::filesystem::path &t_path)
         for (const auto &symbol_table_entry : header.symbol_table_entries()) {
           if (symbol_table_entry.name(string_table) == "main") {
             resolve_symbols(*data, file_header);
+            std::basic_string_view<std::uint8_t> data_view{data->data(), data->size()};
             std::cout << "FOUND MAIN!\n";
             return Loaded_Files{ "",
                                  "",
                                  std::move(data),
-                                 file_header.section_header(symbol_table_entry.section_header_table_index()).section_data(),
-                                 static_cast<std::uint32_t>(symbol_table_entry.value()) };
+                                 data_view,
+                                 static_cast<std::uint32_t>(file_header.section_header(symbol_table_entry.section_header_table_index()).offset()
+                                                            + symbol_table_entry.value()) };
           }
         }
       }
@@ -215,7 +220,7 @@ int main(const int argc, const char *argv[])
   sf::Sprite sprite(texture);
   sf::Clock framerateClock;
   sf::Clock deltaClock;
-  constexpr const auto opsPerFrame = 50000000 / FPS;
+  constexpr const auto opsPerFrame = 10000000 / FPS;
 
   auto rescale_display = [&](const auto last_scale_factor) {
     ImGui::GetStyle().ScaleAllSizes(scale_factor / last_scale_factor);
@@ -350,6 +355,13 @@ int main(const int argc, const char *argv[])
                   arm_thing::test_bit(sys.CSPR, 2),
                   arm_thing::test_bit(sys.CSPR, 1),
                   arm_thing::test_bit(sys.CSPR, 0));
+    }
+
+    ImGui::Text("Stack");
+    const std::uint32_t stack_start = 0x8000;
+    for (std::uint32_t idx = 0; idx < 40; idx += 4)
+    {
+      ImGui::Text("%08x: %08x", stack_start - idx, sys.read_word(stack_start - idx));
     }
     ImGui::End();
 

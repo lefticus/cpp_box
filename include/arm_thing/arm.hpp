@@ -534,22 +534,23 @@ template<std::size_t RAM_Size = 1024> struct System
 
   constexpr void process(const Load_And_Store_Multiple val) noexcept
   {
-    const auto register_list        = val.register_list();
-    const auto bits_set             = popcnt(register_list);
+    const auto register_list = val.register_list();
+    const auto bits_set      = popcnt(register_list);
 
-    auto [start_address, index_amount] = [&]() -> std::pair<std::uint32_t, std::int32_t> {
+
+    auto start_address = [&]() -> std::uint32_t {
       if (val.pre_indexing() && val.up_indexing()) {
         // increment before
-        return { registers[val.base_register()] + 4, 4 };
+        return { registers[val.base_register()] + 4 };
       } else if (!val.pre_indexing() && val.up_indexing()) {
         // increment after
-        return { registers[val.base_register()], 4 };
+        return { registers[val.base_register()] };
       } else if (val.pre_indexing() && !val.up_indexing()) {
         // decrement before
-        return { registers[val.base_register()] - (bits_set * 4), -4 };
+        return { registers[val.base_register()] - (bits_set * 4) };
       } else {
         // decrement after
-        return { registers[val.base_register()] - (bits_set * 4) + 4, -4 };
+        return { registers[val.base_register()] - (bits_set * 4) + 4 };
       }
     }();
 
@@ -559,7 +560,7 @@ template<std::size_t RAM_Size = 1024> struct System
       abort();  // cannot handle PSR
     }
 
-
+    // incrementing, lowest # register goes first
     for (int i = 0; i < 16; ++i) {
       if (test_bit(register_list, i)) {
         if (load) {
@@ -567,11 +568,14 @@ template<std::size_t RAM_Size = 1024> struct System
         } else {
           write_word(start_address, registers[i]);
         }
-        start_address += index_amount;
+        start_address += 4;
       }
     }
 
-    if (val.write_back()) { registers[val.base_register()] += bits_set * index_amount; }
+    if (val.write_back()) {
+      const auto index_amount = val.up_indexing() ? 4 : -4;
+      registers[val.base_register()] += bits_set * index_amount;
+    }
   }
 
   constexpr auto offset(const Single_Data_Transfer val) const noexcept

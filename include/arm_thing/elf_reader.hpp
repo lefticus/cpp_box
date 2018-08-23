@@ -77,7 +77,7 @@ template<typename Getter>[[nodiscard]] constexpr auto make_iterator(Getter t_get
   return Iterable{ t_max, t_getter };
 }
 
-
+// http://refspecs.linuxbase.org/elf/gabi4+/ch4.reloc.html
 struct Relocation_Entry
 {
   enum class Fields { file_offset, info };
