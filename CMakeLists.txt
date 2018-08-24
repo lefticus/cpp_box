@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.2)
 
+
+include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+conan_basic_setup()
+
 set(CMAKE_MODULE_PATH /usr/share/SFML/cmake/Modules)
-include(cmake/Catch.cmake)
+include(${CONAN_LIB_DIRS_CATCH2}/cmake/Catch2/Catch.cmake)
 
 option(BUILD_SHARED_LIBS "Enable compilation of shared libraries" FALSE)
 
@@ -78,7 +82,12 @@ enable_testing()
 
 add_executable(constexpr_tests test/constexpr_tests.cpp)
 target_link_libraries(constexpr_tests PRIVATE project_options project_warnings)
-catch_discover_tests(constexpr_tests)
+catch_discover_tests(constexpr_tests TEST_PREFIX "constexpr.")
+
+add_executable(relaxed_constexpr_tests test/constexpr_tests.cpp)
+target_link_libraries(relaxed_constexpr_tests PRIVATE project_options project_warnings)
+target_compile_definitions(relaxed_constexpr_tests PRIVATE RELAXED_CONSTEXPR=1)
+catch_discover_tests(relaxed_constexpr_tests TEST_PREFIX "relaxed_constexpr.")
 
 add_executable(arm_emu src/main.cpp)
 target_link_libraries(arm_emu PRIVATE project_options project_warnings)
@@ -88,13 +97,18 @@ target_link_libraries(elf_reader PRIVATE project_options project_warnings)
 
 
 # imgui dependencies
-find_package(SFML COMPONENTS graphics window system)
+# set(OpenGL_GL_PREFERENCE GLVND)
 find_package(OpenGL)
+set(SFML_STATIC_LIBRARIES TRUE)
+find_package(SFML REQUIRED system graphics window )
 
+
+
+#target_link_libraries(timer ${CONAN_LIBS})
 
 # imgui + sfml built as a lib, intentionally not using full warning flags
 add_library(imgui src/imgui/lib/imgui.cpp src/imgui/lib/imgui_draw.cpp src/imgui/lib/imgui-SFML.cpp)
-target_link_libraries(imgui INTERFACE sfml-graphics sfml-window sfml-system ${OPENGL_gl_LIBRARY})
+target_link_libraries(imgui INTERFACE ${SFML_LIBRARIES} ${OPENGL_gl_LIBRARY})
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)

@@ -1,5 +1,5 @@
 #define CATCH_CONFIG_MAIN  // This tells Catch to provide a main()
-#include "catch.hpp"
+#include <catch2/catch.hpp>
 
 #include <arm_thing/arm.hpp>
 
@@ -8,6 +8,12 @@ template<bool B> bool static_test()
   static_assert(B);
   return B;
 }
+
+#if defined(RELAXED_CONSTEXPR)
+#define TEST(X) X
+#else
+#define TEST(X) static_test<X>()
+#endif
 
 template<typename... T> constexpr auto run_instruction(T... instruction)
 {
@@ -36,15 +42,15 @@ template<typename... T> constexpr auto run(T... bytes)
 TEST_CASE("test always executing jump")
 {
   constexpr auto systest2 = run_instruction(arm_thing::Instruction{ 0b1110'1010'0000'0000'0000'0000'0000'1111 });
-  REQUIRE(static_test<systest2.PC() == 72>());
-  REQUIRE(static_test<systest2.registers[14] == 0>());
+  REQUIRE(TEST(systest2.PC() == 72));
+  REQUIRE(TEST(systest2.registers[14] == 0));
 }
 
 TEST_CASE("test always executing jump with saved return")
 {
   constexpr auto systest3 = run_instruction(arm_thing::Instruction{ 0b1110'1011'0000'0000'0000'0000'0000'1111 });
-  REQUIRE(static_test<systest3.PC() == 72>());
-  REQUIRE(static_test<systest3.registers[14] == 4>());
+  REQUIRE(TEST(systest3.PC() == 72));
+  REQUIRE(TEST(systest3.registers[14] == 4));
 }
 
 TEST_CASE("test carry flag")
@@ -52,9 +58,9 @@ TEST_CASE("test carry flag")
   //   4:	e3e01000 	mvn	r1, #0
   //  10:	e2911001 	add	r1, r1, #1 ; and set flags
   constexpr auto systest = run_instruction(arm_thing::Instruction{ 0xe3e01000 }, arm_thing::Instruction{ 0xe2911001 });
-  REQUIRE(static_test<systest.registers[1] == 0x0>());
-  REQUIRE(static_test<systest.c_flag()>());
-  REQUIRE(static_test<systest.z_flag()>());
+  REQUIRE(TEST(systest.registers[1] == 0x0));
+  REQUIRE(TEST(systest.c_flag()));
+  REQUIRE(TEST(systest.z_flag()));
 }
 
 
@@ -76,10 +82,10 @@ TEST_CASE("register setups and moves")
                                            arm_thing::Instruction{ 0xe2800001 },
                                            arm_thing::Instruction{ 0xe1510002 });
 
-  REQUIRE(static_test<systest.registers[0] == 1>());
-  REQUIRE(static_test<systest.registers[1] == 0x4003>());
-  REQUIRE(static_test<systest.registers[2] == 0x4000 + 100 * 100 * 4>());
-  REQUIRE(static_test<systest.c_flag() == false>());
+  REQUIRE(TEST(systest.registers[0] == 1));
+  REQUIRE(TEST(systest.registers[1] == 0x4003));
+  REQUIRE(TEST(systest.registers[2] == 0x4000 + 100 * 100 * 4));
+  REQUIRE(TEST(systest.c_flag() == false));
 }
 
 
@@ -89,7 +95,7 @@ TEST_CASE("CMP with carry")
                                            arm_thing::Instruction{ 0xe3a02001 },   // mov r2, #1
                                            arm_thing::Instruction{ 0xe1510002 });  // cmp r1, r2
   // Should be true if no borrow occurred
-  REQUIRE(static_test<systest.c_flag() == true>());
+  REQUIRE(TEST(systest.c_flag() == true));
 }
 
 TEST_CASE("CMP with carry 2")
@@ -98,7 +104,7 @@ TEST_CASE("CMP with carry 2")
                                            arm_thing::Instruction{ 0xe3a02000 },   // mov r2, #0
                                            arm_thing::Instruction{ 0xe1510002 });  // cmp r1, r2
   // Should be true if no borrow occurred
-  REQUIRE(static_test<systest.c_flag() == true>());
+  REQUIRE(TEST(systest.c_flag() == true));
 }
 
 TEST_CASE("CMP with carry 3")
@@ -107,14 +113,14 @@ TEST_CASE("CMP with carry 3")
                                            arm_thing::Instruction{ 0xe3a02001 },   // mov r2, #1
                                            arm_thing::Instruction{ 0xe1510002 });  // cmp r1, r2
   // Should be false if a borrow occurred
-  REQUIRE(static_test<systest.c_flag() == false>());
+  REQUIRE(TEST(systest.c_flag() == false));
 }
 
 
 TEST_CASE("test add of register")
 {
   constexpr auto systest4 = run_instruction(arm_thing::Instruction{ 0xe2800055 });  // add r0, r0, #85
-  REQUIRE(static_test<systest4.registers[0] == 0x55>());
+  REQUIRE(TEST(systest4.registers[0] == 0x55));
 }
 
 TEST_CASE("test add of register with shifts")
@@ -122,7 +128,7 @@ TEST_CASE("test add of register with shifts")
   constexpr auto systest5 = run_instruction(arm_thing::Instruction{ 0xe2800055 },  // add r0, r0, #85
                                             arm_thing::Instruction{ 0xe2800c7e }   // add r0, r0, #32256
   );
-  REQUIRE(static_test<systest5.registers[0] == (85 + 32256)>());
+  REQUIRE(TEST(systest5.registers[0] == (85 + 32256)));
 }
 
 TEST_CASE("test multiple adds and sub")
@@ -132,7 +138,7 @@ TEST_CASE("test multiple adds and sub")
                                             arm_thing::Instruction{ 0xe2822002 },  // add r2, r2, #2
                                             arm_thing::Instruction{ 0xe0423001 }   // sub r3, r2, r1
   );
-  REQUIRE(static_test<systest6.registers[3] == static_cast<std::uint32_t>(2 - 9)>());
+  REQUIRE(TEST(systest6.registers[3] == static_cast<std::uint32_t>(2 - 9)));
 }
 
 TEST_CASE("test add over 16bits")
@@ -142,7 +148,7 @@ TEST_CASE("test add over 16bits")
                                            arm_thing::Instruction{ 0xe2811001 }   // add r1, r1, #1
 
   );
-  REQUIRE(static_test<systest.registers[1] == 0x10000>());
+  REQUIRE(TEST(systest.registers[1] == 0x10000));
 }
 
 
@@ -155,7 +161,7 @@ TEST_CASE("test memory writes")
                                             arm_thing::Instruction{ 0xe1a0f00e }   // mov pc, lr
   );
 
-  REQUIRE(static_test<systest6.read_byte(100) == 5>());
+  REQUIRE(TEST(systest6.read_byte(100) == 5));
 }
 
 
@@ -164,8 +170,8 @@ TEST_CASE("test lsr")
   constexpr auto sys = run_instruction(arm_thing::Instruction{ 0xe3a03005 },  // mov r3, #5
                                        arm_thing::Instruction{ 0xe1a02123 }   // lsr r2, r3, #2
   );
-  REQUIRE(static_test<sys.registers[2] == 1>());
-  REQUIRE(static_test<sys.registers[3] == 5>());
+  REQUIRE(TEST(sys.registers[2] == 1));
+  REQUIRE(TEST(sys.registers[3] == 5));
 }
 
 TEST_CASE("Test sub instruction with shift")
@@ -178,7 +184,7 @@ TEST_CASE("Test sub instruction with shift")
                                                                                    // subtract result from r0 and put answer in r3
   );
 
-  REQUIRE(static_test<systest7.registers[3] == static_cast<std::uint32_t>(1 - (9 >> 2))>());
+  REQUIRE(TEST(systest7.registers[3] == static_cast<std::uint32_t>(1 - (9 >> 2))));
 }
 
 TEST_CASE("Test arbitrary code execution with loop")
@@ -223,16 +229,16 @@ TEST_CASE("Test arbitrary code execution with loop")
 
   constexpr auto system = run_code(0, memory);
 
-  REQUIRE(static_test<system.read_byte(100) == 0>());
-  REQUIRE(static_test<system.read_byte(104) == 4>());
-  REQUIRE(static_test<system.read_byte(105) == 0>());
-  REQUIRE(static_test<system.read_byte(106) == 1>());
+  REQUIRE(TEST(system.read_byte(100) == 0));
+  REQUIRE(TEST(system.read_byte(104) == 4));
+  REQUIRE(TEST(system.read_byte(105) == 0));
+  REQUIRE(TEST(system.read_byte(106) == 1));
 }
 
 
 TEST_CASE("Test condition parsing")
 {
-  REQUIRE(static_test<arm_thing::Instruction{ 0b1110'1010'0000'0000'0000'0000'0000'1111 }.get_condition() == arm_thing::Condition::AL>());
+  REQUIRE(TEST(arm_thing::Instruction{ 0b1110'1010'0000'0000'0000'0000'0000'1111 }.get_condition() == arm_thing::Condition::AL));
 }
 
 TEST_CASE("Test mov parsing")
@@ -242,16 +248,16 @@ TEST_CASE("Test mov parsing")
   constexpr arm_thing::Instruction ins{ 0b1110'0011'1010'0000'0000'0000'1110'1001 };
   constexpr arm_thing::Data_Processing dp{ ins };
 
-  REQUIRE(static_test<ins.get_condition() == arm_thing::Condition::AL>());
-  REQUIRE(static_test<dp.get_opcode() == arm_thing::OpCode::MOV>());
-  REQUIRE(static_test<ins.unconditional()>());
-  REQUIRE(static_test<arm_thing::System<>::decode(ins) == arm_thing::Instruction_Type::Data_Processing>());
+  REQUIRE(TEST(ins.get_condition() == arm_thing::Condition::AL));
+  REQUIRE(TEST(dp.get_opcode() == arm_thing::OpCode::MOV));
+  REQUIRE(TEST(ins.unconditional()));
+  REQUIRE(TEST(arm_thing::System<>::decode(ins) == arm_thing::Instruction_Type::Data_Processing));
 
-  REQUIRE(static_test<dp.operand_1_register() == 0>());
-  REQUIRE(static_test<dp.destination_register() == 0>());
+  REQUIRE(TEST(dp.operand_1_register() == 0));
+  REQUIRE(TEST(dp.destination_register() == 0));
 
-  REQUIRE(static_test<dp.immediate_operand()>());
-  REQUIRE(static_test<dp.operand_2_immediate() == 233>());
+  REQUIRE(TEST(dp.immediate_operand()));
+  REQUIRE(TEST(dp.operand_2_immediate() == 233));
 }
 
 TEST_CASE("Test orr parsing")
@@ -261,16 +267,16 @@ TEST_CASE("Test orr parsing")
   constexpr arm_thing::Instruction ins{ 0b1110'0011'1000'0000'0000'1100'0000'0011 };
   constexpr arm_thing::Data_Processing dp{ ins };
 
-  REQUIRE(static_test<ins.get_condition() == arm_thing::Condition::AL>());
-  REQUIRE(static_test<ins.unconditional()>());
-  REQUIRE(static_test<arm_thing::System<>::decode(ins) == arm_thing::Instruction_Type::Data_Processing>());
+  REQUIRE(TEST(ins.get_condition() == arm_thing::Condition::AL));
+  REQUIRE(TEST(ins.unconditional()));
+  REQUIRE(TEST(arm_thing::System<>::decode(ins) == arm_thing::Instruction_Type::Data_Processing));
 
-  REQUIRE(static_test<dp.get_opcode() == arm_thing::OpCode::ORR>());
-  REQUIRE(static_test<dp.operand_1_register() == 0>());
-  REQUIRE(static_test<dp.destination_register() == 0>());
+  REQUIRE(TEST(dp.get_opcode() == arm_thing::OpCode::ORR));
+  REQUIRE(TEST(dp.operand_1_register() == 0));
+  REQUIRE(TEST(dp.destination_register() == 0));
 
-  REQUIRE(static_test<dp.immediate_operand()>());
-  REQUIRE(static_test<dp.operand_2_immediate() == 768>());
+  REQUIRE(TEST(dp.immediate_operand()));
+  REQUIRE(TEST(dp.operand_2_immediate() == 768));
 }
 
 TEST_CASE("Test complex register value setting")
@@ -279,7 +285,7 @@ TEST_CASE("Test complex register value setting")
   // 4:	e3800c03 	orr	r0, r0, #768	; 0x300
   constexpr auto thing = run(0xe9, 0x00, 0xa0, 0xe3, 0x03, 0x0c, 0x80, 0xe3);
   //  std::cout << thing.registers[0] << '\n';
-  REQUIRE(static_test<thing.registers[0] == 1001>());
+  REQUIRE(TEST(thing.registers[0] == 1001));
 }
 
 TEST_CASE("Test arbitrary movs")
@@ -288,8 +294,8 @@ TEST_CASE("Test arbitrary movs")
   // 4:	e3a0100c 	mov	r1, #12
 
   constexpr auto system = run(0xe9, 0x00, 0xa0, 0xe3, 0x0c, 0x10, 0xa0, 0xe3);
-  REQUIRE(static_test<system.registers[0] == 233>());
-  REQUIRE(static_test<system.registers[1] == 12>());
+  REQUIRE(TEST(system.registers[0] == 233));
+  REQUIRE(TEST(system.registers[1] == 12));
 }
 
 
@@ -307,5 +313,5 @@ TEST_CASE("Test arbitrary code")
 
   constexpr auto thing =
     run(0xe9, 0, 0xa0, 0xe3, 0x0c, 0x10, 0xa0, 0xe3, 0x03, 0x0c, 0x80, 0xe3, 0x00, 0x10, 0xc0, 0xe5, 0x00, 0x00, 0xa0, 0xe3, 0x0e, 0xf0, 0xa0, 0xe1);
-  REQUIRE(static_test<thing.read_byte(1001) == 12>());
+  REQUIRE(TEST(thing.read_byte(1001) == 12));
 }
