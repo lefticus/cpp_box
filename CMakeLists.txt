@@ -100,22 +100,23 @@ target_link_libraries(elf_reader PRIVATE project_options project_warnings)
 # set(OpenGL_GL_PREFERENCE GLVND)
 find_package(OpenGL)
 set(SFML_STATIC_LIBRARIES TRUE)
-find_package(SFML REQUIRED system graphics window )
 
+find_package(SFML REQUIRED system graphics window )
+find_package(fmt REQUIRED)
 
 
 #target_link_libraries(timer ${CONAN_LIBS})
 
 # imgui + sfml built as a lib, intentionally not using full warning flags
 add_library(imgui src/imgui/lib/imgui.cpp src/imgui/lib/imgui_draw.cpp src/imgui/lib/imgui-SFML.cpp)
-target_link_libraries(imgui INTERFACE ${SFML_LIBRARIES} ${OPENGL_gl_LIBRARY})
+target_link_libraries(imgui INTERFACE sfml-system sfml-graphics sfml-window ${OPENGL_gl_LIBRARY})
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
 # imgui test executable, with full warnings enabled
 add_executable(imgui_client src/imgui_client.cpp)
-target_link_libraries(imgui_client PRIVATE project_options imgui Threads::Threads)
+target_link_libraries(imgui_client PRIVATE project_options imgui Threads::Threads fmt::fmt)
 target_include_directories(imgui_client PRIVATE ${SFML_INCLUDE_DIR})
 
 
