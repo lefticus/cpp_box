@@ -27,7 +27,7 @@ template<std::size_t Idx, typename F, typename V> constexpr decltype(auto) simpl
 template<typename T>[[nodiscard]] constexpr T popcnt(T v) noexcept
 {
   T c{ 0 };
-  for (; v; ++c) { v &= v - 1; }
+  for (; v; ++c) { v &= static_cast<T>(v - 1); }
   return c;
 }
 
@@ -519,6 +519,8 @@ template<std::size_t RAM_Size = 1024> struct System
         return { test_bit(value, (shift_amount - 1)), (value >> shift_amount) | (value << (32 - shift_amount)) };
       }
     }
+
+    abort();
   }
 
   [[nodiscard]] constexpr auto get_second_operand(const Data_Processing val) const noexcept -> std::pair<bool, std::uint32_t>
@@ -547,10 +549,10 @@ template<std::size_t RAM_Size = 1024> struct System
         return { registers[val.base_register()] };
       } else if (val.pre_indexing() && !val.up_indexing()) {
         // decrement before
-        return { registers[val.base_register()] - (bits_set * 4) };
+        return { registers[val.base_register()] - (bits_set * 4u) };
       } else {
         // decrement after
-        return { registers[val.base_register()] - (bits_set * 4) + 4 };
+        return { registers[val.base_register()] - (bits_set * 4u) + 4 };
       }
     }();
 
@@ -561,7 +563,7 @@ template<std::size_t RAM_Size = 1024> struct System
     }
 
     // incrementing, lowest # register goes first
-    for (int i = 0; i < 16; ++i) {
+    for (std::size_t i = 0; i < 16; ++i) {
       if (test_bit(register_list, i)) {
         if (load) {
           registers[i] = read_word(start_address);
@@ -574,7 +576,7 @@ template<std::size_t RAM_Size = 1024> struct System
 
     if (val.write_back()) {
       const auto index_amount = val.up_indexing() ? 4 : -4;
-      registers[val.base_register()] += bits_set * index_amount;
+      registers[val.base_register()] += static_cast<std::uint32_t>(bits_set * index_amount);
     }
   }
 

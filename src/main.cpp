@@ -30,8 +30,7 @@ template<typename Map> void dump_memory_map(const Map &m)
   }
 }
 
-template<typename System, typename Registers>
-void dump_state(const System &sys, const Registers &last_registers)
+template<typename System, typename Registers> void dump_state(const System &sys, const Registers &last_registers)
 {
   std::cout << ' ' << std::setw(8) << std::setfill('0') << std::hex << sys.PC();
 
@@ -74,13 +73,15 @@ int main(const int argc, const char *argv[])
 
     auto last_registers = sys.registers;
     int opcount         = 0;
-    const auto tracer   = [&opcount]([[maybe_unused]] const auto &sys, [[maybe_unused]] const auto pc, [[maybe_unused]] const auto ins) { ++opcount; };
+    const auto tracer   = [&opcount]([[maybe_unused]] const auto &t_sys, [[maybe_unused]] const auto t_pc, [[maybe_unused]] const auto t_ins) {
+      ++opcount;
+    };
 
     sys.run(0x00000000, tracer);
 
     std::cout << "Total instructions executed: " << opcount << '\n';
 
     dump_state(sys, last_registers);
-    //if ((++opcount) % 1000 == 0) { std::cout << opcount << '\n'; }
+    // if ((++opcount) % 1000 == 0) { std::cout << opcount << '\n'; }
   }
 }

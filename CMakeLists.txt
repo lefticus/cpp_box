@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.2)
 
 
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
-conan_basic_setup()
+conan_basic_setup(TARGETS)
 
 set(CMAKE_MODULE_PATH /usr/share/SFML/cmake/Modules)
 include(${CONAN_LIB_DIRS_CATCH2}/cmake/Catch2/Catch.cmake)
@@ -75,22 +75,19 @@ else()
   endif()
 endif()
 
-#add_executable(arm main.cpp)
-#target_link_libraries(arm PRIVATE project_options project_warnings)
-
 enable_testing()
 
 add_executable(constexpr_tests test/constexpr_tests.cpp)
-target_link_libraries(constexpr_tests PRIVATE project_options project_warnings)
+target_link_libraries(constexpr_tests PRIVATE project_options project_warnings CONAN_PKG::catch2)
 catch_discover_tests(constexpr_tests TEST_PREFIX "constexpr.")
 
 add_executable(relaxed_constexpr_tests test/constexpr_tests.cpp)
-target_link_libraries(relaxed_constexpr_tests PRIVATE project_options project_warnings)
+target_link_libraries(relaxed_constexpr_tests PRIVATE project_options project_warnings CONAN_PKG::catch2)
 target_compile_definitions(relaxed_constexpr_tests PRIVATE RELAXED_CONSTEXPR=1)
 catch_discover_tests(relaxed_constexpr_tests TEST_PREFIX "relaxed_constexpr.")
 
 add_executable(arm_emu src/main.cpp)
-target_link_libraries(arm_emu PRIVATE project_options project_warnings)
+target_link_libraries(arm_emu PRIVATE project_options project_warnings CONAN_PKG::rang)
 
 add_executable(elf_reader src/elf_reader.cpp)
 target_link_libraries(elf_reader PRIVATE project_options project_warnings)
@@ -105,18 +102,20 @@ find_package(SFML REQUIRED system graphics window )
 find_package(fmt REQUIRED)
 
 
-#target_link_libraries(timer ${CONAN_LIBS})
 
 # imgui + sfml built as a lib, intentionally not using full warning flags
-add_library(imgui src/imgui/lib/imgui.cpp src/imgui/lib/imgui_draw.cpp src/imgui/lib/imgui-SFML.cpp)
+add_library(imgui external/imgui/lib/imgui.cpp external/imgui/lib/imgui_draw.cpp external/imgui/lib/imgui-SFML.cpp)
 target_link_libraries(imgui INTERFACE sfml-system sfml-graphics sfml-window ${OPENGL_gl_LIBRARY})
+
+add_library(utility src/utility.cpp )
+target_link_libraries(utility PRIVATE project_options project_warnings PUBLIC CONAN_PKG::spdlog)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
 # imgui test executable, with full warnings enabled
 add_executable(imgui_client src/imgui_client.cpp)
-target_link_libraries(imgui_client PRIVATE project_options imgui Threads::Threads fmt::fmt)
-target_include_directories(imgui_client PRIVATE ${SFML_INCLUDE_DIR})
+target_link_libraries(imgui_client PRIVATE project_options project_warnings utility imgui Threads::Threads fmt::fmt CONAN_PKG::rang)
+target_include_directories(imgui_client SYSTEM PRIVATE external)
 
 

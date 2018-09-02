@@ -109,8 +109,9 @@ struct Relocation_Entry
     switch (field) {
     case Fields::file_offset: return 0;
     case Fields::info: return bits_32 ? 4 : 8;
-    default: assert(false);
     }
+
+    abort();
   }
 
   [[nodiscard]] constexpr auto size(const Fields field) const noexcept
@@ -118,8 +119,9 @@ struct Relocation_Entry
     switch (field) {
     case Fields::file_offset: return bits_32 ? 4 : 8;
     case Fields::info: return bits_32 ? 4 : 8;
-    default: assert(false);
     }
+
+    abort();
   }
 
   [[nodiscard]] constexpr auto read(const Fields field) const noexcept -> std::uint64_t
@@ -129,8 +131,9 @@ struct Relocation_Entry
     case 2: return read_loc<2>(data, offset(field), little_endian);
     case 4: return read_loc<4>(data, offset(field), little_endian);
     case 8: return read_loc<8>(data, offset(field), little_endian);
-    default: assert(false);
     }
+
+    abort();
   }
 
   [[nodiscard]] constexpr auto file_offset() const noexcept { return read(Fields::file_offset); }
@@ -229,8 +232,9 @@ struct Symbol_Table_Entry
     case Fields::st_info: return bits_32 ? 12 : 4;
     case Fields::st_other: return bits_32 ? 13 : 5;
     case Fields::st_shndx: return bits_32 ? 14 : 6;
-    default: assert(false);
     }
+
+    abort();
   }
 
   [[nodiscard]] constexpr auto size(const Fields field) const noexcept
@@ -242,8 +246,9 @@ struct Symbol_Table_Entry
     case Fields::st_info: return 1;
     case Fields::st_other: return 1;
     case Fields::st_shndx: return 2;
-    default: assert(false);
     }
+
+    abort();
   }
 
   [[nodiscard]] constexpr auto name_offset() const noexcept { return read(Fields::st_name); }
@@ -269,8 +274,9 @@ struct Symbol_Table_Entry
     case 2: return read_loc<2>(data, offset(field), little_endian);
     case 4: return read_loc<4>(data, offset(field), little_endian);
     case 8: return read_loc<8>(data, offset(field), little_endian);
-    default: assert(false);
     }
+
+    abort();
   }
 };
 
@@ -344,8 +350,9 @@ struct Section_Header
     case Fields::sh_info: return bits_32 ? 0x1C : 0x2C;
     case Fields::sh_addralign: return bits_32 ? 0x20 : 0x30;
     case Fields::sh_entsize: return bits_32 ? 0x24 : 0x38;
-    default: assert(false);
     }
+
+    abort();
   }
 
   [[nodiscard]] constexpr auto size(const Fields field) const noexcept
@@ -361,8 +368,9 @@ struct Section_Header
     case Fields::sh_info: return 4;
     case Fields::sh_addralign: return bits_32 ? 4 : 8;
     case Fields::sh_entsize: return bits_32 ? 4 : 8;
-    default: assert(false);
     }
+
+    abort();
   }
 
   [[nodiscard]] constexpr auto type() const noexcept -> Types
@@ -413,8 +421,9 @@ struct Section_Header
     case 2: return read_loc<2>(data, offset(field), little_endian);
     case 4: return read_loc<4>(data, offset(field), little_endian);
     case 8: return read_loc<8>(data, offset(field), little_endian);
-    default: assert(false);
     }
+
+    abort();
   }
 
   [[nodiscard]] constexpr auto section_data() const noexcept -> std::basic_string_view<std::uint8_t> { return full_data.substr(offset(), size()); }
@@ -518,8 +527,9 @@ struct File_Header
     case Fields::e_shentsize: return bits_32() ? 0x2E : 0x3A;
     case Fields::e_shnum: return bits_32() ? 0x30 : 0x3C;
     case Fields::e_shstrndx: return bits_32() ? 0x32 : 0x3E;
-    default: assert(false);
     }
+
+    abort();
   }
 
   [[nodiscard]] constexpr auto size(const Fields field) const noexcept
@@ -549,8 +559,9 @@ struct File_Header
     case Fields::e_shentsize: return 2;
     case Fields::e_shnum: return 2;
     case Fields::e_shstrndx: return 2;
-    default: assert(false);
     }
+
+    abort();
   }
 
 
@@ -656,8 +667,10 @@ struct File_Header
     switch (multibyte_data()) {
     case Data::little_endian: return true;
     case Data::big_endian: return false;
-    default: assert(false);
+    case Data::Unknown: abort();
     }
+
+    abort();
   }
 
   [[nodiscard]] constexpr auto bits_32() const noexcept -> bool
@@ -665,8 +678,10 @@ struct File_Header
     switch (bit_class()) {
     case Class::bits_32: return true;
     case Class::bits_64: return false;
-    default: assert(false);
+    case Class::Unknown: abort();
     }
+
+    abort();
   }
 
   [[nodiscard]] constexpr auto elf_version() const noexcept { return read(Fields::ei_version); }
@@ -783,6 +798,8 @@ struct File_Header
         return std::string_view{ reinterpret_cast<const char *>(string_data.data()), string_data.size() };
       }
     }
+
+    abort();
   }
 
   [[nodiscard]] constexpr auto symbol_table() const noexcept {
@@ -791,6 +808,8 @@ struct File_Header
         return section_header;
       }
     }
+
+    abort();
   }
 
 
@@ -801,8 +820,9 @@ struct File_Header
     case 2: return read_loc<2>(data, offset(field), little_endian());
     case 4: return read_loc<4>(data, offset(field), little_endian());
     case 8: return read_loc<8>(data, offset(field), little_endian());
-    default: assert(false);
     }
+
+    abort();
   }
 };
 }  // namespace arm_thing::elf

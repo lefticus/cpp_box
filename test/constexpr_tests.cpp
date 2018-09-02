@@ -50,7 +50,7 @@ TEST_CASE("test always executing jump with saved return")
 {
   constexpr auto systest3 = run_instruction(arm_thing::Instruction{ 0b1110'1011'0000'0000'0000'0000'0000'1111 });
   REQUIRE(TEST(systest3.PC() == 72));
-  REQUIRE(TEST(systest3.registers[14] == 4));
+  REQUIRE(TEST(systest3.registers[14] == 8));
 }
 
 TEST_CASE("test carry flag")
