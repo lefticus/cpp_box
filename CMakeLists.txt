@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.2)
 
-
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup(TARGETS)
 
@@ -39,38 +38,38 @@ if(MSVC)
   target_compile_options(project_warnings INTERFACE /W4)
 else()
   target_compile_options(project_warnings
-                         INTERFACE
-                         -Wall
-                         -Wextra # reasonable and standard
-                         -Wshadow # warn the user if a variable declaration shadows one from a
-                                  # parent context
-                         -Wnon-virtual-dtor # warn the user if a class with virtual functions has a
-                                            # non-virtual destructor. This helps catch hard to
-                                            # track down memory errors
-                         -Wold-style-cast # warn for c-style casts
-                         -Wcast-align # warn for potential performance problem casts
-                         -Wunused # warn on anything being unused
-                         -Woverloaded-virtual # warn if you overload (not override) a virtual
-                                              # function
-                         -Wpedantic # warn if non-standard C++ is used
-                         -Wconversion # warn on type conversions that may lose data
-                         -Wsign-conversion # warn on sign conversions
-                         -Wnull-dereference # warn if a null dereference is detected
-                         -Wdouble-promotion # warn if float is implicit promoted to double
-                         -Wformat=2 # warn on security issues around functions that format output
-                                    # (ie printf)
+                         INTERFACE -Wall
+                                   -Wextra # reasonable and standard
+                                   -Wshadow # warn the user if a variable declaration shadows one
+                                            # from a parent context
+                                   -Wnon-virtual-dtor # warn the user if a class with virtual
+                                                      # functions has a non-virtual destructor. This
+                                                      # helps catch hard to track down memory errors
+                                   -Wold-style-cast # warn for c-style casts
+                                   -Wcast-align # warn for potential performance problem casts
+                                   -Wunused # warn on anything being unused
+                                   -Woverloaded-virtual # warn if you overload (not override) a
+                                                        # virtual function
+                                   -Wpedantic # warn if non-standard C++ is used
+                                   -Wconversion # warn on type conversions that may lose data
+                                   -Wsign-conversion # warn on sign conversions
+                                   -Wnull-dereference # warn if a null dereference is detected
+                                   -Wdouble-promotion # warn if float is implicit promoted to double
+                                   -Wformat=2 # warn on security issues around functions that format
+                                              # output (ie printf)
                          )
 
-  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     target_compile_options(project_warnings
-                           INTERFACE
-                           -Wmisleading-indentation # warn if identation implies blocks where blocks
-                                                    # do not exist
-                           -Wduplicated-cond # warn if if / else chain has duplicated conditions
-                           -Wduplicated-branches # warn if if / else branches have duplicated code
-                           -Wlogical-op # warn about logical operations being used where bitwise were
-                                        # probably wanted
-                           -Wuseless-cast # warn if you perform a cast to the same type
+                           INTERFACE -Wmisleading-indentation # warn if identation implies blocks
+                                                              # where blocks do not exist
+                                     -Wduplicated-cond # warn if if / else chain has duplicated
+                                                       # conditions
+                                     -Wduplicated-branches # warn if if / else branches have
+                                                           # duplicated code
+                                     -Wlogical-op # warn about logical operations being used where
+                                                  # bitwise were probably wanted
+                                     -Wuseless-cast # warn if you perform a cast to the same type
                            )
   endif()
 endif()
@@ -82,7 +81,8 @@ target_link_libraries(constexpr_tests PRIVATE project_options project_warnings C
 catch_discover_tests(constexpr_tests TEST_PREFIX "constexpr.")
 
 add_executable(relaxed_constexpr_tests test/constexpr_tests.cpp)
-target_link_libraries(relaxed_constexpr_tests PRIVATE project_options project_warnings CONAN_PKG::catch2)
+target_link_libraries(relaxed_constexpr_tests
+                      PRIVATE project_options project_warnings CONAN_PKG::catch2)
 target_compile_definitions(relaxed_constexpr_tests PRIVATE RELAXED_CONSTEXPR=1)
 catch_discover_tests(relaxed_constexpr_tests TEST_PREFIX "relaxed_constexpr.")
 
@@ -92,22 +92,27 @@ target_link_libraries(arm_emu PRIVATE project_options project_warnings CONAN_PKG
 add_executable(elf_reader src/elf_reader.cpp)
 target_link_libraries(elf_reader PRIVATE project_options project_warnings)
 
+#imgui dependencies
 
-# imgui dependencies
-# set(OpenGL_GL_PREFERENCE GLVND)
+set(OpenGL_GL_PREFERENCE GLVND)
 find_package(OpenGL)
 set(SFML_STATIC_LIBRARIES TRUE)
 
-find_package(SFML REQUIRED system graphics window )
+find_package(SFML REQUIRED system graphics window)
 find_package(fmt REQUIRED)
 
-
-
 # imgui + sfml built as a lib, intentionally not using full warning flags
-add_library(imgui external/imgui/lib/imgui.cpp external/imgui/lib/imgui_draw.cpp external/imgui/lib/imgui-SFML.cpp)
-target_link_libraries(imgui INTERFACE sfml-system sfml-graphics sfml-window ${OPENGL_gl_LIBRARY})
+add_library(imgui
+            external/imgui/lib/imgui.cpp
+            external/imgui/lib/imgui_draw.cpp
+            external/imgui/lib/imgui-SFML.cpp)
+target_link_libraries(imgui
+                      INTERFACE sfml-system
+                                sfml-graphics
+                                sfml-window
+                                OpenGL::GL)
 
-add_library(utility src/utility.cpp )
+add_library(utility src/utility.cpp)
 target_link_libraries(utility PRIVATE project_options project_warnings PUBLIC CONAN_PKG::spdlog)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
@@ -115,7 +120,12 @@ find_package(Threads REQUIRED)
 
 # imgui test executable, with full warnings enabled
 add_executable(imgui_client src/imgui_client.cpp)
-target_link_libraries(imgui_client PRIVATE project_options project_warnings utility imgui Threads::Threads fmt::fmt CONAN_PKG::rang)
+target_link_libraries(imgui_client
+                      PRIVATE project_options
+                              project_warnings
+                              utility
+                              imgui
+                              Threads::Threads
+                              fmt::fmt
+                              CONAN_PKG::rang)
 target_include_directories(imgui_client SYSTEM PRIVATE external)
-
-
