@@ -98,7 +98,7 @@ set(OpenGL_GL_PREFERENCE GLVND)
 find_package(OpenGL)
 set(SFML_STATIC_LIBRARIES TRUE)
 
-find_package(SFML REQUIRED system graphics window)
+find_package(SFML 2.5 REQUIRED system graphics window)
 find_package(fmt REQUIRED)
 
 # imgui + sfml built as a lib, intentionally not using full warning flags
@@ -107,10 +107,10 @@ add_library(imgui
             external/imgui/lib/imgui_draw.cpp
             external/imgui/lib/imgui-SFML.cpp)
 target_link_libraries(imgui
-                      INTERFACE sfml-system
-                                sfml-graphics
-                                sfml-window
-                                OpenGL::GL)
+                      PUBLIC sfml-system
+                             sfml-graphics
+                             sfml-window
+                             OpenGL::GL)
 
 add_library(utility src/utility.cpp)
 target_link_libraries(utility PRIVATE project_options project_warnings PUBLIC CONAN_PKG::spdlog)
