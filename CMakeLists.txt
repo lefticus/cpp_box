@@ -17,10 +17,12 @@ add_library(project_options INTERFACE)
 target_compile_features(project_options INTERFACE cxx_std_17)
 target_include_directories(project_options INTERFACE include external)
 
+option(ONLY_COVERAGE "Build only tests necessary for coverage" FALSE)
+
 if(CMAKE_COMPILER_IS_GNUCC)
   option(ENABLE_COVERAGE "Enable coverage reporting for gcc/clang" FALSE)
 
-  if(ENABLE_COVERAGE)
+  if(ONLY_COVERAGE OR ENABLE_COVERAGE)
     target_compile_options(project_options INTERFACE --coverage -O0 -g)
     target_link_libraries(project_options INTERFACE --coverage)
   endif()
@@ -79,7 +81,7 @@ enable_testing()
 
 add_executable(constexpr_tests test/constexpr_tests.cpp)
 target_link_libraries(constexpr_tests PRIVATE project_options project_warnings CONAN_PKG::catch2)
-#catch_discover_tests(constexpr_tests TEST_PREFIX "constexpr.")
+# catch_discover_tests(constexpr_tests TEST_PREFIX "constexpr.")
 
 add_executable(relaxed_constexpr_tests test/constexpr_tests.cpp)
 target_link_libraries(relaxed_constexpr_tests
@@ -87,47 +89,49 @@ target_link_libraries(relaxed_constexpr_tests
 target_compile_definitions(relaxed_constexpr_tests PRIVATE RELAXED_CONSTEXPR=1)
 catch_discover_tests(relaxed_constexpr_tests TEST_PREFIX "relaxed_constexpr.")
 
-add_executable(arm_emu src/main.cpp)
-target_link_libraries(arm_emu PRIVATE project_options project_warnings CONAN_PKG::rang)
+if(NOT ONLY_COVERAGE)
+  add_executable(arm_emu src/main.cpp)
+  target_link_libraries(arm_emu PRIVATE project_options project_warnings CONAN_PKG::rang)
 
-add_executable(elf_reader src/elf_reader.cpp)
-target_link_libraries(elf_reader PRIVATE project_options project_warnings)
+  add_executable(elf_reader src/elf_reader.cpp)
+  target_link_libraries(elf_reader PRIVATE project_options project_warnings)
 
-#imgui dependencies
+  # imgui dependencies
 
-set(OpenGL_GL_PREFERENCE GLVND)
-find_package(OpenGL)
-set(SFML_STATIC_LIBRARIES TRUE)
+  set(OpenGL_GL_PREFERENCE GLVND)
+  find_package(OpenGL)
+  set(SFML_STATIC_LIBRARIES TRUE)
 
-find_package(SFML 2.5 REQUIRED system graphics window)
-find_package(fmt REQUIRED)
+  find_package(SFML 2.5 REQUIRED system graphics window)
+  find_package(fmt REQUIRED)
 
-# imgui + sfml built as a lib, intentionally not using full warning flags
-add_library(imgui
-            external/imgui/lib/imgui.cpp
-            external/imgui/lib/imgui_draw.cpp
-            external/imgui/lib/imgui-SFML.cpp)
-target_link_libraries(imgui
-                      PUBLIC sfml-system
-                             sfml-graphics
-                             sfml-window
-                             OpenGL::GL)
+  # imgui + sfml built as a lib, intentionally not using full warning flags
+  add_library(imgui
+              external/imgui/lib/imgui.cpp
+              external/imgui/lib/imgui_draw.cpp
+              external/imgui/lib/imgui-SFML.cpp)
+  target_link_libraries(imgui
+                        PUBLIC sfml-system
+                               sfml-graphics
+                               sfml-window
+                               OpenGL::GL)
 
-add_library(utility src/utility.cpp)
-target_link_libraries(utility PRIVATE project_options project_warnings PUBLIC CONAN_PKG::spdlog)
+  add_library(utility src/utility.cpp)
+  target_link_libraries(utility PRIVATE project_options project_warnings PUBLIC CONAN_PKG::spdlog)
 
-set(THREADS_PREFER_PTHREAD_FLAG ON)
-find_package(Threads REQUIRED)
+  set(THREADS_PREFER_PTHREAD_FLAG ON)
+  find_package(Threads REQUIRED)
 
-# imgui test executable, with full warnings enabled
-add_executable(imgui_client src/imgui_client.cpp)
-target_link_libraries(imgui_client
-                      PRIVATE project_options
-                              project_warnings
-                              utility
-                              imgui
-                              Threads::Threads
-                              fmt::fmt
-                              CONAN_PKG::rang
-                              CONAN_PKG::libpng)
-target_include_directories(imgui_client SYSTEM PRIVATE external)
+  # imgui test executable, with full warnings enabled
+  add_executable(imgui_client src/imgui_client.cpp)
+  target_link_libraries(imgui_client
+                        PRIVATE project_options
+                                project_warnings
+                                utility
+                                imgui
+                                Threads::Threads
+                                fmt::fmt
+                                CONAN_PKG::rang
+                                CONAN_PKG::libpng)
+  target_include_directories(imgui_client SYSTEM PRIVATE external)
+endif()
