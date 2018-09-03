@@ -9,6 +9,7 @@ addons:
     packages:
       - g++-8
       - libx11-dev
+      - libxrandr-dev
 install:
   pip install --user conan
 
