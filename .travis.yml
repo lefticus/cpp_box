@@ -1,35 +1,37 @@
-dist: trusty
-sudo: false
 language: cpp
 
 addons:
   apt:
     sources:
       - ubuntu-toolchain-r-test
+      - llvm-toolchain-trusty-6.0
     packages:
       - g++-8
       - libx11-dev
       - libxrandr-dev
       - libudev-dev
-      - kcov
+      - clang-6.0
+
+matrix:
+  include:
+    - os: linux
+      sudo: false
+      env: CXX=/usr/bin/clang++-6.0 CC=/usr/bin/clang-6.0 GCOV=/usr/bin/llvm-cov
+
 install:
   pip install --user conan
 
 script:
-  - /usr/bin/g++-8 --version
+  - echo $CXX
+  - $CXX --version
   - mkdir build
   - cd build
-  - export CXX=/usr/bin/g++-8
-  - export CC=/usr/bin/gcc-8
-  - echo $CXX
   - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
   - conan install .. --build missing
   - cmake -D CMAKE_BUILD_TYPE:STRING=Debug -D ENABLE_COVERAGE:BOOL=TRUE ..
   - VERBOSE=1 cmake --build . -- -j2
   - ctest -j2
-  - mkdir coverage
-  - kcov --exclude-pattern=/usr/include,/usr/local/include,conan coverage ./bin/relaxed_constexpr_tests
-  - bash <(curl -s https://codecov.io/bash) -x /usr/bin/gcov-8 -a "-s `cd ..; pwd`" 2>/dev/null
+  - bash <(curl -s https://codecov.io/bash) 2>/dev/null
 
 
 
