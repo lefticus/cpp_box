@@ -15,11 +15,14 @@ script:
   - /usr/bin/g++-8 --version
   - mkdir build
   - cd build
-  - CXX=/usr/bin/g++-8 CC=/usr/bin/gcc-8 conan install ..
-  - CXX=/usr/bin/g++-8 CC=/usr/bin/gcc-8 cmake -D ENABLE_COVERAGE:BOOL=TRUE ..
+  - export CXX=/usr/bin/g++-8
+  - export CC=/usr/bin/gcc-8
+  - echo $CXX
+  - conan install .. --build missing
+  - cmake -D ENABLE_COVERAGE:BOOL=TRUE ..
   - cmake --build . -- -j2 
   - ctest -j2
-  - bash <(curl -s https://codecov.io/bash) -x /usr/bin/gcov-5
+  - bash <(curl -s https://codecov.io/bash) -x /usr/bin/gcov-8
 
 
 
