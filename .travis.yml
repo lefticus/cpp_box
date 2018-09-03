@@ -1,15 +1,5 @@
 language: cpp
 
-addons:
-  apt:
-    sources:
-      - ubuntu-toolchain-r-test
-      - llvm-toolchain-trusty-6.0
-    packages:
-      - libx11-dev
-      - libxrandr-dev
-      - libudev-dev
-
 matrix:
   include:
     - name: "gcc 7 Debug Coverage"
@@ -18,7 +8,12 @@ matrix:
       env: CXX_EXE=/usr/bin/g++-7 CC_EXE=/usr/bin/gcc-7 GCOV=/usr/bin/gcov-7 CMAKE_OPTS="-D ONLY_COVERAGE:BOOL=TRUE -D CMAKE_BUILD_TYPE:STRING=Debug"
       addons:
         apt:
+          sources:
+            - ubuntu-toolchain-r-test
           packages:
+            - libx11-dev
+            - libxrandr-dev
+            - libudev-dev
             - g++-7
     - name: "gcc 8 Release"
       os: linux
@@ -26,7 +21,12 @@ matrix:
       env: CXX_EXE=/usr/bin/g++-8 CC_EXE=/usr/bin/gcc-8 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-D CMAKE_BUILD_TYPE:STRING=Release"
       addons:
         apt:
+          sources:
+            - ubuntu-toolchain-r-test
           packages:
+            - libx11-dev
+            - libxrandr-dev
+            - libudev-dev
             - g++-8
     - name: "clang 6.0 Debug"
       os: linux
@@ -34,7 +34,12 @@ matrix:
       env: CXX_EXE=/usr/bin/clang++-6.0 CC_EXE=/usr/bin/clang-6.0 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-D CMAKE_BUILD_TYPE:STRING=Debug"
       addons:
         apt:
+          sources:
+            - llvm-toolchain-trusty-6.0
           packages:
+            - libx11-dev
+            - libxrandr-dev
+            - libudev-dev
             - clang-6.0
 
 
