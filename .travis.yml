@@ -5,7 +5,7 @@ matrix:
     - name: "gcc 7 Debug Coverage"
       os: linux
       sudo: false
-      env: COVERAGE=1 CXX_EXE=/usr/bin/g++-7 CC_EXE=/usr/bin/gcc-7 GCOV=/usr/bin/gcov-7 CMAKE_OPTS="-DONLY_COVERAGE:BOOL=TRUE -DCMAKE_BUILD_TYPE:STRING=Debug"
+      env: COVERAGE=1 CXX_EXE=/usr/bin/g++-7 CC_EXE=/usr/bin/gcc-7 GCOV=/usr/bin/gcov-7 CMAKE_OPTS="-DONLY_COVERAGE:BOOL=ON -DCMAKE_BUILD_TYPE:STRING=Debug"
       addons:
         apt:
           sources:
@@ -31,7 +31,7 @@ matrix:
     - name: "clang 6.0 / libc++ Debug"
       os: linux
       sudo: false
-      env: CXX_EXE=/usr/bin/clang++-6.0 CC_EXE=/usr/bin/clang-6.0 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-DLIBCPP:BOOL=TRUE"
+      env: CXX_EXE=/usr/bin/clang++-6.0 CC_EXE=/usr/bin/clang-6.0 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-DLIBCPP:BOOL=ON"
       addons:
         apt:
           sources:
@@ -59,7 +59,7 @@ script:
   - cd build
   - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
   - conan install .. --build missing
-  - cmake  .. $CMAKE_OPTS
+  - cmake  $CMAKE_OPTS ..
   - VERBOSE=1 cmake --build . -- -j2
   - ctest -j2
   - if [ "${COVERAGE}" = "1" ]; then bash <(curl -s https://codecov.io/bash) -x $GCOV 2>/dev/null ; fi
