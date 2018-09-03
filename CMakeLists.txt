@@ -22,6 +22,7 @@ if(CMAKE_COMPILER_IS_GNUCC)
 
   if(ENABLE_COVERAGE)
     target_compile_options(project_options INTERFACE --coverage -O0)
+    target_link_libraries(project_options INTERFACE --coverage)
   endif()
 
   option(ENABLE_ASAN "Enable address sanitizer" FALSE)
