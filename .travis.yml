@@ -8,9 +8,15 @@ addons:
       - ubuntu-toolchain-r-test
     packages:
       - g++-5
+      - g++-6
+install:
+  pip install conan
 
 script:
-  - CXX=/usr/bin/g++-5 CC=/usr/bin/gcc-5 cmake -D ENABLE_COVERAGE:BOOL=TRUE . 
+  - mkdir build
+  - cd build
+  - CXX=/usr/bin/g++-5 CC=/usr/bin/gcc-5 conan install ..
+  - CXX=/usr/bin/g++-5 CC=/usr/bin/gcc-5 cmake -D ENABLE_COVERAGE:BOOL=TRUE ..
   - cmake --build . -- -j2 
   - ctest -j2
   - bash <(curl -s https://codecov.io/bash) -x /usr/bin/gcov-5
