@@ -21,7 +21,7 @@ if(CMAKE_COMPILER_IS_GNUCC)
   option(ENABLE_COVERAGE "Enable coverage reporting for gcc/clang" FALSE)
 
   if(ENABLE_COVERAGE)
-    target_compile_options(project_options INTERFACE --coverage -O0)
+    target_compile_options(project_options INTERFACE --coverage -O0 -g)
     target_link_libraries(project_options INTERFACE --coverage)
   endif()
 

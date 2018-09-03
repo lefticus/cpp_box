@@ -24,7 +24,7 @@ script:
   - echo $CXX
   - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
   - conan install .. --build missing
-  - cmake -D ENABLE_COVERAGE:BOOL=TRUE ..
+  - cmake -D CMAKE_BUILD_TYPE:STRING=Debug -D ENABLE_COVERAGE:BOOL=TRUE ..
   - cmake --build . -- -j2 
   - ctest -j2
   - bash <(curl -s https://codecov.io/bash) -x /usr/bin/gcov-8
