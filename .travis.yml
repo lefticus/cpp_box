@@ -5,7 +5,7 @@ matrix:
     - name: "gcc 7 Debug Coverage"
       os: linux
       sudo: false
-      env: COVERAGE=1 CXX_EXE=/usr/bin/g++-7 CC_EXE=/usr/bin/gcc-7 GCOV=/usr/bin/gcov-7 CMAKE_OPTS="-D ONLY_COVERAGE:BOOL=TRUE -D CMAKE_BUILD_TYPE:STRING=Debug"
+      env: COVERAGE=1 CXX_EXE=/usr/bin/g++-7 CC_EXE=/usr/bin/gcc-7 GCOV=/usr/bin/gcov-7 CMAKE_OPTS="-DONLY_COVERAGE:BOOL=TRUE -DCMAKE_BUILD_TYPE:STRING=Debug"
       addons:
         apt:
           sources:
@@ -18,7 +18,7 @@ matrix:
     - name: "gcc 8 Release"
       os: linux
       sudo: false
-      env: CXX_EXE=/usr/bin/g++-8 CC_EXE=/usr/bin/gcc-8 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-D CMAKE_BUILD_TYPE:STRING=Release"
+      env: CXX_EXE=/usr/bin/g++-8 CC_EXE=/usr/bin/gcc-8 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-DCMAKE_BUILD_TYPE:STRING=Release"
       addons:
         apt:
           sources:
@@ -31,7 +31,7 @@ matrix:
     - name: "clang 6.0 / libc++ Debug"
       os: linux
       sudo: false
-      env: CXX_EXE=/usr/bin/clang++-6.0 CC_EXE=/usr/bin/clang-6.0 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-D CMAKE_BUILD_TYPE:STRING=Debug -D LIBCPP:BOOL=TRUE"
+      env: CXX_EXE=/usr/bin/clang++-6.0 CC_EXE=/usr/bin/clang-6.0 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-DCMAKE_BUILD_TYPE:STRING=Debug -DLIBCPP:BOOL=TRUE"
       addons:
         apt:
           sources:
