@@ -128,5 +128,6 @@ target_link_libraries(imgui_client
                               imgui
                               Threads::Threads
                               fmt::fmt
-                              CONAN_PKG::rang)
+                              CONAN_PKG::rang
+                              CONAN_PKG::libpng)
 target_include_directories(imgui_client SYSTEM PRIVATE external)
