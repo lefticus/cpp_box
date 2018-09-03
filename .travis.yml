@@ -8,6 +8,7 @@ addons:
       - ubuntu-toolchain-r-test
     packages:
       - g++-8
+      - libx11-dev
 install:
   pip install --user conan
 
