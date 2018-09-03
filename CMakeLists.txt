@@ -36,10 +36,10 @@ if(CMAKE_COMPILER_IS_GNUCC)
 
   option(LIB_CPP "Build with libc++" FALSE)
 
-  if (NOT LIB_CPP)
-    target_link_libraries(project_options INTERFACE stdc++fs)
-  else()
+  if (LIB_CPP)
     target_compile_options(project_options INTERFACE -stdlib=libc++)
+  else()
+    target_link_libraries(project_options INTERFACE stdc++fs)
   endif()
 endif()
 
