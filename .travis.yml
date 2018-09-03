@@ -10,6 +10,8 @@ addons:
       - g++-8
       - libx11-dev
       - libxrandr-dev
+      - libudev-dev
+
 install:
   pip install --user conan
 
