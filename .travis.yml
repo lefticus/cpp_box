@@ -42,7 +42,7 @@ matrix:
             - libxrandr-dev
             - libudev-dev
             - clang-6.0
-            - libc++-6.0
+            - libc++
 
 
 
