@@ -12,10 +12,11 @@ install:
   pip install --user conan
 
 script:
+  - /usr/bin/g++-8 --version
   - mkdir build
   - cd build
-  - CXX=/usr/bin/g++-8 CC=/usr/bin/gcc-5 conan install ..
-  - CXX=/usr/bin/g++-8 CC=/usr/bin/gcc-5 cmake -D ENABLE_COVERAGE:BOOL=TRUE ..
+  - CXX=/usr/bin/g++-8 CC=/usr/bin/gcc-8 conan install ..
+  - CXX=/usr/bin/g++-8 CC=/usr/bin/gcc-8 cmake -D ENABLE_COVERAGE:BOOL=TRUE ..
   - cmake --build . -- -j2 
   - ctest -j2
   - bash <(curl -s https://codecov.io/bash) -x /usr/bin/gcov-5
