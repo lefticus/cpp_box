@@ -580,6 +580,7 @@ template<std::size_t RAM_Size = 1024> struct System
     }
   }
 
+
   constexpr auto offset(const Single_Data_Transfer val) const noexcept
   {
     const auto offset = [=]() -> std::int64_t {
