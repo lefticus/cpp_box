@@ -78,7 +78,7 @@ enable_testing()
 
 add_executable(constexpr_tests test/constexpr_tests.cpp)
 target_link_libraries(constexpr_tests PRIVATE project_options project_warnings CONAN_PKG::catch2)
-catch_discover_tests(constexpr_tests TEST_PREFIX "constexpr.")
+#catch_discover_tests(constexpr_tests TEST_PREFIX "constexpr.")
 
 add_executable(relaxed_constexpr_tests test/constexpr_tests.cpp)
 target_link_libraries(relaxed_constexpr_tests
