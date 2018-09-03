@@ -18,6 +18,7 @@ target_compile_features(project_options INTERFACE cxx_std_17)
 target_include_directories(project_options INTERFACE include external)
 
 option(ONLY_COVERAGE "Build only tests necessary for coverage" FALSE)
+option(LIB_CPP "Build with libc++" FALSE)
 
 if(CMAKE_COMPILER_IS_GNUCC)
   option(ENABLE_COVERAGE "Enable coverage reporting for gcc/clang" FALSE)
@@ -34,7 +35,6 @@ if(CMAKE_COMPILER_IS_GNUCC)
     target_link_libraries(project_options INTERFACE -fsanitize=address)
   endif()
 
-  option(LIB_CPP "Build with libc++" FALSE)
 
   if (LIB_CPP)
     target_compile_options(project_options INTERFACE -stdlib=libc++)
