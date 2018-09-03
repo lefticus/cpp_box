@@ -31,7 +31,7 @@ matrix:
     - name: "clang 6.0 / libc++ Debug"
       os: linux
       sudo: false
-      env: CXX_EXE=/usr/bin/clang++-6.0 CC_EXE=/usr/bin/clang-6.0 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-D CMAKE_BUILD_TYPE:STRING=Debug -D LIB_CPP:BOOL=TRUE"
+      env: CXX_EXE=/usr/bin/clang++-6.0 CC_EXE=/usr/bin/clang-6.0 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-D CMAKE_BUILD_TYPE:STRING=Debug -D LIBCPP:BOOL=TRUE"
       addons:
         apt:
           sources:
