@@ -18,6 +18,7 @@ script:
   - export CXX=/usr/bin/g++-8
   - export CC=/usr/bin/gcc-8
   - echo $CXX
+  - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
   - conan install .. --build missing
   - cmake -D ENABLE_COVERAGE:BOOL=TRUE ..
   - cmake --build . -- -j2 
