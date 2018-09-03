@@ -11,6 +11,7 @@ addons:
       - libx11-dev
       - libxrandr-dev
       - libudev-dev
+      - libpng16-dev
 
 install:
   pip install --user conan
