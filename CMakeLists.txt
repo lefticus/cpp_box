@@ -17,10 +17,11 @@ add_library(project_options INTERFACE)
 target_compile_features(project_options INTERFACE cxx_std_17)
 target_include_directories(project_options INTERFACE include external)
 
-option(ONLY_COVERAGE "Build only tests necessary for coverage" FALSE)
-option(LIBCPP "Build with libc++" FALSE)
-
-if(CMAKE_COMPILER_IS_GNUCC)
+if(MSVC)
+  target_compile_options(project_warnings INTERFACE /W4)
+else()
+  option(ONLY_COVERAGE "Build only tests necessary for coverage" FALSE)
+  option(LIBCPP "Build with libc++" FALSE)
   option(ENABLE_COVERAGE "Enable coverage reporting for gcc/clang" FALSE)
 
   if(ONLY_COVERAGE OR ENABLE_COVERAGE)
@@ -35,17 +36,6 @@ if(CMAKE_COMPILER_IS_GNUCC)
     target_link_libraries(project_options INTERFACE -fsanitize=address)
   endif()
 
-
-  if (LIBCPP)
-    target_compile_options(project_options INTERFACE -stdlib=libc++)
-  else()
-    target_link_libraries(project_options INTERFACE stdc++fs)
-  endif()
-endif()
-
-if(MSVC)
-  target_compile_options(project_warnings INTERFACE /W4)
-else()
   target_compile_options(project_warnings
                          INTERFACE -Wall
                                    -Wextra # reasonable and standard
@@ -69,6 +59,7 @@ else()
                          )
 
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    target_link_libraries(project_options INTERFACE stdc++fs)
     target_compile_options(project_warnings
                            INTERFACE -Wmisleading-indentation # warn if identation implies blocks
                                                               # where blocks do not exist
@@ -80,6 +71,11 @@ else()
                                                   # bitwise were probably wanted
                                      -Wuseless-cast # warn if you perform a cast to the same type
                            )
+  else()
+    if(LIBCPP)
+      target_compile_options(project_options INTERFACE -stdlib=libc++)
+    endif()
+
   endif()
 endif()
 
