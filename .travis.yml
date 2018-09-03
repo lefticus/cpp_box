@@ -7,15 +7,15 @@ addons:
     sources:
       - ubuntu-toolchain-r-test
     packages:
-      - g++-5
+      - g++-8
 install:
-  pip install conan
+  pip install --user conan
 
 script:
   - mkdir build
   - cd build
-  - CXX=/usr/bin/g++-5 CC=/usr/bin/gcc-5 conan install ..
-  - CXX=/usr/bin/g++-5 CC=/usr/bin/gcc-5 cmake -D ENABLE_COVERAGE:BOOL=TRUE ..
+  - CXX=/usr/bin/g++-8 CC=/usr/bin/gcc-5 conan install ..
+  - CXX=/usr/bin/g++-8 CC=/usr/bin/gcc-5 cmake -D ENABLE_COVERAGE:BOOL=TRUE ..
   - cmake --build . -- -j2 
   - ctest -j2
   - bash <(curl -s https://codecov.io/bash) -x /usr/bin/gcov-5
