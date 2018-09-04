@@ -1,8 +1,10 @@
+[![Build Status](https://travis-ci.org/lefticus/arm_thing.svg?branch=master)](https://travis-ci.org/lefticus/arm_thing)
+[![codecov](https://codecov.io/gh/lefticus/arm_thing/branch/master/graph/badge.svg)](https://codecov.io/gh/lefticus/arm_thing)
+
+
 # arm_thing
 
 Implements a partial ARMv4 architecture in software.
-
-Eventual goal is to be able to execute arbitrary arm objects on a virtual machine of my creation.
 
 For code this can accept, use gcc or clang in `-march=armv4` mode.
 
