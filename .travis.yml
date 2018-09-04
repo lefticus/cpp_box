@@ -1,24 +1,69 @@
-dist: trusty
-sudo: false
 language: cpp
 
-addons:
-  apt:
-    sources:
-      - ubuntu-toolchain-r-test
-    packages:
-      - g++-8
+matrix:
+  include:
+    - name: "gcc 7 Debug Coverage"
+      os: linux
+      sudo: false
+      env: COVERAGE=1 CXX_EXE=/usr/bin/g++-7 CC_EXE=/usr/bin/gcc-7 GCOV=/usr/bin/gcov-7 CMAKE_OPTS="-DONLY_COVERAGE:BOOL=ON -DCMAKE_BUILD_TYPE:STRING=Debug"
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - libx11-dev
+            - libxrandr-dev
+            - libudev-dev
+            - g++-7
+    - name: "gcc 8 Release"
+      os: linux
+      sudo: false
+      env: CXX_EXE=/usr/bin/g++-8 CC_EXE=/usr/bin/gcc-8 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-DCMAKE_BUILD_TYPE:STRING=Release"
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - libx11-dev
+            - libxrandr-dev
+            - libudev-dev
+            - g++-8
+    - name: "clang 7 / libc++ Debug"
+      os: linux
+      sudo: false
+      env: CXX_EXE=/usr/bin/clang++-7 CC_EXE=/usr/bin/clang-7 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-DLIBCPP:BOOL=ON"
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+            - llvm-toolchain-trusty-7
+          packages:
+            - libx11-dev
+            - libxrandr-dev
+            - libudev-dev
+            - clang-7
+            - libc++-7
+
+
+
+
 install:
   pip install --user conan
 
 script:
+  - export CXX=$CXX_EXE
+  - export CC=$CC_EXE
+  - echo $CXX
+  - echo $CMAKE_OPTS
+  - $CXX --version
   - mkdir build
   - cd build
-  - CXX=/usr/bin/g++-8 CC=/usr/bin/gcc-5 conan install ..
-  - CXX=/usr/bin/g++-8 CC=/usr/bin/gcc-5 cmake -D ENABLE_COVERAGE:BOOL=TRUE ..
-  - cmake --build . -- -j2 
+  - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
+  - conan install .. --build missing
+  - cmake  $CMAKE_OPTS ..
+  - VERBOSE=1 cmake --build . -- -j2
   - ctest -j2
-  - bash <(curl -s https://codecov.io/bash) -x /usr/bin/gcov-5
+  - if [ "${COVERAGE}" = "1" ]; then bash <(curl -s https://codecov.io/bash) -x $GCOV 2>/dev/null ; fi
 
 
 
