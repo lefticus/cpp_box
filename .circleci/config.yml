@@ -1,22 +1,29 @@
 version: 2
 jobs:
-  build:
+  gcc_8_default:
     docker:
       - image: lasote/conangcc8
-  steps:
-    - checkout
-    - run: gcc-8 --version
-    - run: cmake --version
-    - run: conan --version
-    - run: export CXX=`which g++-8`
-    - run: export CC=`which gcc-8`
-    - run: mkdir build
-    - run: cd build
-    - run: conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
-    - run: conan install .. --build missing
-    - run: cmake  $CMAKE_OPTS ..
-    - run: VERBOSE=1 cmake --build . -- -j2
-    - run: ctest -j2
-
+    working_directory: ~/arm_thing
+    steps:
+      - run: sudo apt-get update
+      - run: sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git
+      - checkout
+      - run: pwd
+      - run: gcc-8 --version
+      - run: cmake --version
+      - run: conan --version
+      - run: export CXX=`which g++-8`
+      - run: export CC=`which gcc-8`
+      - run: mkdir build
+      - run: cd build; conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
+      - run: cd build; conan install .. --build missing
+      - run: cd build; cmake ..
+      - run: cd build; VERBOSE=1 cmake --build . -- -j2
+      - run: cd build; ctest -j2
+workflows:
+  version: 2
+  workflow:
+    jobs:
+    - gcc_8_default
 
 
