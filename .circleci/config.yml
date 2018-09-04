@@ -6,20 +6,18 @@ jobs:
     working_directory: ~/arm_thing
     steps:
       - checkout
+      - run: pwd
       - run: gcc-8 --version
       - run: cmake --version
       - run: conan --version
       - run: export CXX=`which g++-8`
       - run: export CC=`which gcc-8`
-      - run: cd ~/arm_thing
       - run: mkdir build
-      - run: cd build
-      - run: pwd
-      - run: conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
-      - run: conan install .. --build missing
-      - run: cmake  $CMAKE_OPTS ..
-      - run: VERBOSE=1 cmake --build . -- -j2
-      - run: ctest -j2
+      - run: cd build; conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
+      - run: cd build; conan install .. --build missing
+      - run: cd build; cmake  $CMAKE_OPTS ..
+      - run: cd build; VERBOSE=1 cmake --build . -- -j2
+      - run: cd build; ctest -j2
 
 
 
