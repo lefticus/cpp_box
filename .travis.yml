@@ -28,21 +28,21 @@ matrix:
             - libxrandr-dev
             - libudev-dev
             - g++-8
-    - name: "clang 6.0 / libc++ Debug"
+    - name: "clang 7 / libc++ Debug"
       os: linux
       sudo: false
-      env: CXX_EXE=/usr/bin/clang++-6.0 CC_EXE=/usr/bin/clang-6.0 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-DLIBCPP:BOOL=ON"
+      env: CXX_EXE=/usr/bin/clang++-7 CC_EXE=/usr/bin/clang-7 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-DLIBCPP:BOOL=ON"
       addons:
         apt:
           sources:
             - ubuntu-toolchain-r-test
-            - llvm-toolchain-trusty-6.0
+            - llvm-toolchain-trusty-7
           packages:
             - libx11-dev
             - libxrandr-dev
             - libudev-dev
-            - clang-6.0
-            - libc++
+            - clang-7
+            - libc++-7
 
 
 
