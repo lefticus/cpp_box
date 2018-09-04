@@ -14,7 +14,7 @@ jobs:
       - run: cd ~/arm_thing
       - run: mkdir build
       - run: cd build
-        run: pwd
+      - run: pwd
       - run: conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
       - run: conan install .. --build missing
       - run: cmake  $CMAKE_OPTS ..
