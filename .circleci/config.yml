@@ -5,6 +5,8 @@ jobs:
       - image: lasote/conangcc8
     working_directory: ~/arm_thing
     steps:
+      - run: sudo apt-get update
+      - run: sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git
       - checkout
       - run: pwd
       - run: gcc-8 --version
@@ -13,8 +15,6 @@ jobs:
       - run: export CXX=`which g++-8`
       - run: export CC=`which gcc-8`
       - run: mkdir build
-      - run: sudo apt-get update
-      - run: sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev
       - run: cd build; conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
       - run: cd build; conan install .. --build missing
       - run: cd build; cmake  $CMAKE_OPTS ..
