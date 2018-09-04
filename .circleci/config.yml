@@ -3,6 +3,7 @@ jobs:
   build:
     docker:
       - image: lasote/conangcc8
+    working_directory: ~/arm_thing
     steps:
       - checkout
       - run: gcc-8 --version
@@ -10,7 +11,7 @@ jobs:
       - run: conan --version
       - run: export CXX=`which g++-8`
       - run: export CC=`which gcc-8`
-      - run: cd $CIRCLE_WORKING_DIRECTORY
+      - run: cd ~/arm_thing
       - run: mkdir build
       - run: cd build
         run: pwd
