@@ -20,6 +20,10 @@ jobs:
       - run: cd build; cmake ..
       - run: cd build; VERBOSE=1 cmake --build . -- -j2
       - run: cd build; ctest -j2
-
+workflows:
+  version: 2
+  workflow:
+    jobs:
+    - gcc_8_default
 
 
