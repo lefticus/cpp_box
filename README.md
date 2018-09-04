@@ -1,6 +1,6 @@
 [![Build Status](https://travis-ci.org/lefticus/arm_thing.svg?branch=master)](https://travis-ci.org/lefticus/arm_thing)
 [![codecov](https://codecov.io/gh/lefticus/arm_thing/branch/master/graph/badge.svg)](https://codecov.io/gh/lefticus/arm_thing)
-
+[![CircleCI master](https://img.shields.io/circleci/project/github/lefticus/arm_thing/master.svg)](https://circleci.com/gh/lefticus/arm_thing)
 
 # arm_thing
 
