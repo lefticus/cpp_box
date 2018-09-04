@@ -13,6 +13,7 @@ jobs:
       - run: export CXX=`which g++-8`
       - run: export CC=`which gcc-8`
       - run: mkdir build
+      - run: sudo apt-get update
       - run: sudo apt-get install libbz2-dev libpng-dev libfreetype6-dev libz-dev
       - run: cd build; conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
       - run: cd build; conan install .. --build missing
