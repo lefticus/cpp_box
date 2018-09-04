@@ -14,7 +14,7 @@ jobs:
       - run: export CC=`which gcc-8`
       - run: mkdir build
       - run: sudo apt-get update
-      - run: sudo apt-get install libbz2-dev libpng-dev libfreetype6-dev libz-dev
+      - run: sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev
       - run: cd build; conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
       - run: cd build; conan install .. --build missing
       - run: cd build; cmake  $CMAKE_OPTS ..
