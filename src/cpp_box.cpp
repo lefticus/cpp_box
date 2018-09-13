@@ -196,28 +196,28 @@ struct Box
 
     static constexpr auto state_machine =
       cpp_box::state_machine::StateMachine{ cpp_box::state_machine::StateTransition{ States::Start, States::Reset, s_always_true },
-                                             cpp_box::state_machine::StateTransition{ States::Reset, States::Reset_Timer, s_always_true },
-                                             cpp_box::state_machine::StateTransition{ States::Reset_Timer, States::Static, s_always_true },
-                                             cpp_box::state_machine::StateTransition{ States::Static, States::Static, s_static_timer },
-                                             cpp_box::state_machine::StateTransition{ States::Static, States::Running, s_running },
-                                             cpp_box::state_machine::StateTransition{ States::Static, States::Paused, s_paused },
-                                             cpp_box::state_machine::StateTransition{ States::Static, States::Begin_Build, s_can_start_build },
-                                             cpp_box::state_machine::StateTransition{ States::Static, States::Parse_Build_Results, s_build_ready },
-                                             cpp_box::state_machine::StateTransition{ States::Begin_Build, States::Static, s_failed },
-                                             cpp_box::state_machine::StateTransition{ States::Begin_Build, States::Running, s_running },
-                                             cpp_box::state_machine::StateTransition{ States::Begin_Build, States::Paused, s_paused },
-                                             cpp_box::state_machine::StateTransition{ States::Running, States::Begin_Build, s_can_start_build },
-                                             cpp_box::state_machine::StateTransition{ States::Running, States::Parse_Build_Results, s_build_ready },
-                                             cpp_box::state_machine::StateTransition{ States::Running, States::Reset, s_reset_pressed },
-                                             cpp_box::state_machine::StateTransition{ States::Running, States::Paused, s_paused },
-                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Reset, s_reset_pressed },
-                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Parse_Build_Results, s_build_ready },
-                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Running, s_running },
-                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Step_One, s_step_pressed },
-                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Begin_Build, s_can_start_build },
-                                             cpp_box::state_machine::StateTransition{ States::Parse_Build_Results, States::Reset, s_always_true },
-                                             cpp_box::state_machine::StateTransition{ States::Step_One, States::Step_One, s_step_pressed },
-                                             cpp_box::state_machine::StateTransition{ States::Step_One, States::Paused, s_always_true } };
+                                            cpp_box::state_machine::StateTransition{ States::Reset, States::Reset_Timer, s_always_true },
+                                            cpp_box::state_machine::StateTransition{ States::Reset_Timer, States::Static, s_always_true },
+                                            cpp_box::state_machine::StateTransition{ States::Static, States::Static, s_static_timer },
+                                            cpp_box::state_machine::StateTransition{ States::Static, States::Running, s_running },
+                                            cpp_box::state_machine::StateTransition{ States::Static, States::Paused, s_paused },
+                                            cpp_box::state_machine::StateTransition{ States::Static, States::Begin_Build, s_can_start_build },
+                                            cpp_box::state_machine::StateTransition{ States::Static, States::Parse_Build_Results, s_build_ready },
+                                            cpp_box::state_machine::StateTransition{ States::Begin_Build, States::Static, s_failed },
+                                            cpp_box::state_machine::StateTransition{ States::Begin_Build, States::Running, s_running },
+                                            cpp_box::state_machine::StateTransition{ States::Begin_Build, States::Paused, s_paused },
+                                            cpp_box::state_machine::StateTransition{ States::Running, States::Begin_Build, s_can_start_build },
+                                            cpp_box::state_machine::StateTransition{ States::Running, States::Parse_Build_Results, s_build_ready },
+                                            cpp_box::state_machine::StateTransition{ States::Running, States::Reset, s_reset_pressed },
+                                            cpp_box::state_machine::StateTransition{ States::Running, States::Paused, s_paused },
+                                            cpp_box::state_machine::StateTransition{ States::Paused, States::Reset, s_reset_pressed },
+                                            cpp_box::state_machine::StateTransition{ States::Paused, States::Parse_Build_Results, s_build_ready },
+                                            cpp_box::state_machine::StateTransition{ States::Paused, States::Running, s_running },
+                                            cpp_box::state_machine::StateTransition{ States::Paused, States::Step_One, s_step_pressed },
+                                            cpp_box::state_machine::StateTransition{ States::Paused, States::Begin_Build, s_can_start_build },
+                                            cpp_box::state_machine::StateTransition{ States::Parse_Build_Results, States::Reset, s_always_true },
+                                            cpp_box::state_machine::StateTransition{ States::Step_One, States::Step_One, s_step_pressed },
+                                            cpp_box::state_machine::StateTransition{ States::Step_One, States::Paused, s_always_true } };
 
     bool build_ready() const { return future_build.valid() && future_build.wait_for(std::chrono::microseconds(1)) == std::future_status::ready; }
     bool is_building() const { return future_build.valid(); }
@@ -453,7 +453,7 @@ struct Box
 
       switch (status.next_state(draw_interface(status))) {
       case Status::States::Running:
-        for (int i = 0; i < status.opsPerFrame; ++i) { status.sys.next_operation(); }
+        for (int i = 0; i < status.opsPerFrame && status.sys.operations_remaining(); ++i) { status.sys.next_operation(); }
         status.texture.update(&status.sys.builtin_ram[0x10000]);
         break;
       case Status::States::Begin_Build:
@@ -480,8 +480,10 @@ struct Box
       case Status::States::Start: break;
       case Status::States::Reset_Timer: status.reset_static_timer(); break;
       case Status::States::Step_One:
-        status.sys.next_operation();
-        status.texture.update(&status.sys.builtin_ram[0x10000]);
+        if (status.sys.operations_remaining()) {
+          status.sys.next_operation();
+          status.texture.update(&status.sys.builtin_ram[0x10000]);
+        }
         break;
       case Status::States::Static:
         const auto texture_size = status.texture.getSize();
