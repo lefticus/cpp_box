@@ -4,7 +4,7 @@
 
 // todo: make asserts into aborts if necessary?
 
-namespace arm_thing::elf {
+namespace cpp_box::elf {
 
 // todo, move this into a shared utility location
 template<std::size_t Bytes, typename Data>
@@ -825,4 +825,4 @@ struct File_Header
     abort();
   }
 };
-}  // namespace arm_thing::elf
+}  // namespace cpp_box::elf

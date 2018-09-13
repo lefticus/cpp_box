@@ -1,8 +1,8 @@
-[![Build Status](https://travis-ci.org/lefticus/arm_thing.svg?branch=master)](https://travis-ci.org/lefticus/arm_thing)
-[![codecov](https://codecov.io/gh/lefticus/arm_thing/branch/master/graph/badge.svg)](https://codecov.io/gh/lefticus/arm_thing)
-[![CircleCI master](https://img.shields.io/circleci/project/github/lefticus/arm_thing/master.svg)](https://circleci.com/gh/lefticus/arm_thing)
+[![Build Status](https://travis-ci.org/lefticus/cpp_box.svg?branch=master)](https://travis-ci.org/lefticus/cpp_box)
+[![codecov](https://codecov.io/gh/lefticus/cpp_box/branch/master/graph/badge.svg)](https://codecov.io/gh/lefticus/cpp_box)
+[![CircleCI master](https://img.shields.io/circleci/project/github/lefticus/cpp_box/master.svg)](https://circleci.com/gh/lefticus/cpp_box)
 
-# arm_thing
+# cpp_box
 
 Implements a partial ARMv4 architecture in software.
 

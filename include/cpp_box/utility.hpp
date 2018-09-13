@@ -9,15 +9,15 @@ namespace spdlog {
 struct logger;
 }
 
-namespace arm_thing {
-namespace elf {
-  struct File_Header;
+namespace cpp_box::elf {
+struct File_Header;
 }
 
+namespace cpp_box::utility {
 std::vector<uint8_t> read_file(const std::filesystem::path &t_path);
 
 
-void resolve_symbols(std::vector<std::uint8_t> &data, const arm_thing::elf::File_Header &file_header, spdlog::logger &logger);
+void resolve_symbols(std::vector<std::uint8_t> &data, const cpp_box::elf::File_Header &file_header, spdlog::logger &logger);
 
 // creates an RAII managed temporary directory
 struct Temp_Directory
@@ -35,7 +35,7 @@ struct Temp_Directory
 private:
   std::filesystem::path m_dir;
 };
-}  // namespace arm_thing
+}  // namespace cpp_box::utility
 
 
 #endif

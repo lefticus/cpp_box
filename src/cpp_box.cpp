@@ -1,7 +1,7 @@
-#include "../include/arm_thing/arm.hpp"
-#include "../include/arm_thing/elf_reader.hpp"
-#include "../include/arm_thing/utility.hpp"
-#include "../include/arm_thing/state_machine.hpp"
+#include "../include/cpp_box/arm.hpp"
+#include "../include/cpp_box/elf_reader.hpp"
+#include "../include/cpp_box/utility.hpp"
+#include "../include/cpp_box/state_machine.hpp"
 
 #include <cmath>
 #include <string>
@@ -17,7 +17,7 @@
 #include "imgui/lib/imgui.h"
 #include "imgui/lib/imgui-SFML.h"
 
-#include "../include/arm_thing/utility.hpp"
+#include "../include/cpp_box/utility.hpp"
 
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/System/Clock.hpp>
@@ -30,7 +30,7 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <rang.hpp>
 
-struct Thing
+struct Box
 {
   template<typename Cont> static void dump_rom(const Cont &c)
   {
@@ -62,11 +62,11 @@ struct Thing
 
   static Loaded_Files load_unknown(const std::filesystem::path &t_path, spdlog::logger &logger)
   {
-    auto data = std::make_unique<std::vector<std::uint8_t>>(arm_thing::read_file(t_path));
+    auto data = std::make_unique<std::vector<std::uint8_t>>(cpp_box::utility::read_file(t_path));
     logger.info("Loading unknown file type: '{}', file exists? {}", t_path.c_str(), std::filesystem::exists(t_path));
 
     if (data->size() >= 64) {
-      const auto file_header = arm_thing::elf::File_Header{ { data->data(), data->size() } };
+      const auto file_header = cpp_box::elf::File_Header{ { data->data(), data->size() } };
       logger.info("'{}' is ELF?: {}", t_path.c_str(), file_header.is_elf_file());
       if (file_header.is_elf_file()) {
         const auto sh_string_table = file_header.sh_string_table();
@@ -75,7 +75,7 @@ struct Thing
         for (const auto &header : file_header.section_headers()) {
           for (const auto &symbol_table_entry : header.symbol_table_entries()) {
             if (symbol_table_entry.name(string_table) == "main") {
-              arm_thing::resolve_symbols(*data, file_header, logger);
+              cpp_box::utility::resolve_symbols(*data, file_header, logger);
               std::basic_string_view<std::uint8_t> data_view{ data->data(), data->size() };
               const auto main_section     = file_header.section_header(symbol_table_entry.section_header_table_index());
               const auto main_file_offset = static_cast<std::uint32_t>(main_section.offset() + symbol_table_entry.value());
@@ -104,7 +104,7 @@ struct Thing
   {
     logger.info("Compile Starting");
 
-    arm_thing::Temp_Directory dir("ARM_THING");
+    cpp_box::utility::Temp_Directory dir("ARM_THING");
 
     logger.debug("Using dir: '{}'", dir.dir().c_str());
     const auto cpp_file = dir.dir() / "src.cpp";
@@ -125,7 +125,7 @@ struct Thing
     std::system(build_command.c_str());
 
     logger.debug("Executing compile command: '{}'", build_command);
-    const auto assembly = arm_thing::read_file(asm_file);
+    const auto assembly = cpp_box::utility::read_file(asm_file);
     auto loaded         = load_unknown(obj_file, logger);
 
     const std::regex strip_attributes{ "\\n\\s+\\..*", std::regex::ECMAScript };
@@ -176,7 +176,7 @@ struct Thing
     Timer static_timer{ 0.5f };
 
     bool build_good() const noexcept { return loaded_files.good_binary; }
-    arm_thing::System<1024 * 1024> sys;
+    cpp_box::arm::System<1024 * 1024> sys;
 
     sf::Texture texture;
     sf::Sprite sprite;
@@ -190,32 +190,34 @@ struct Thing
     static constexpr auto s_failed          = [](const auto &status, const auto &) { return !status.build_good(); };
     static constexpr auto s_static_timer    = [](const auto &status, const auto &) { return !status.static_timer.expired(); };
     static constexpr auto s_can_start_build = [](const auto &status, const auto &) { return status.needs_build && !status.is_building(); };
-    static constexpr auto s_always_true     = [](const auto &, const auto) { return true; };
+    static constexpr auto s_always_true     = [](const auto &, const auto &) { return true; };
     static constexpr auto s_reset_pressed   = [](const auto &, const auto &inputs) { return inputs.reset_pressed; };
     static constexpr auto s_step_pressed    = [](const auto &, const auto &inputs) { return inputs.step_pressed; };
 
     static constexpr auto state_machine =
-      arm_thing::StateMachine{ arm_thing::StateTransition{ States::Start, States::Reset, s_always_true },
-                               arm_thing::StateTransition{ States::Reset, States::Reset_Timer, s_always_true },
-                               arm_thing::StateTransition{ States::Reset_Timer, States::Static, s_always_true },
-                               arm_thing::StateTransition{ States::Static, States::Static, s_static_timer },
-                               arm_thing::StateTransition{ States::Static, States::Running, s_running },
-                               arm_thing::StateTransition{ States::Static, States::Paused, s_paused },
-                               arm_thing::StateTransition{ States::Static, States::Begin_Build, s_can_start_build },
-                               arm_thing::StateTransition{ States::Static, States::Parse_Build_Results, s_build_ready },
-                               arm_thing::StateTransition{ States::Begin_Build, States::Static, s_failed },
-                               arm_thing::StateTransition{ States::Begin_Build, States::Running, s_running },
-                               arm_thing::StateTransition{ States::Begin_Build, States::Paused, s_paused },
-                               arm_thing::StateTransition{ States::Running, States::Begin_Build, s_can_start_build },
-                               arm_thing::StateTransition{ States::Running, States::Parse_Build_Results, s_build_ready },
-                               arm_thing::StateTransition{ States::Running, States::Reset, s_reset_pressed },
-                               arm_thing::StateTransition{ States::Running, States::Paused, s_paused },
-                               arm_thing::StateTransition{ States::Paused, States::Parse_Build_Results, s_build_ready },
-                               arm_thing::StateTransition{ States::Paused, States::Running, s_running },
-                               arm_thing::StateTransition{ States::Paused, States::Step_One, s_step_pressed },
-                               arm_thing::StateTransition{ States::Paused, States::Begin_Build, s_can_start_build },
-                               arm_thing::StateTransition{ States::Parse_Build_Results, States::Reset, s_always_true },
-                               arm_thing::StateTransition{ States::Step_One, States::Paused, s_always_true } };
+      cpp_box::state_machine::StateMachine{ cpp_box::state_machine::StateTransition{ States::Start, States::Reset, s_always_true },
+                                             cpp_box::state_machine::StateTransition{ States::Reset, States::Reset_Timer, s_always_true },
+                                             cpp_box::state_machine::StateTransition{ States::Reset_Timer, States::Static, s_always_true },
+                                             cpp_box::state_machine::StateTransition{ States::Static, States::Static, s_static_timer },
+                                             cpp_box::state_machine::StateTransition{ States::Static, States::Running, s_running },
+                                             cpp_box::state_machine::StateTransition{ States::Static, States::Paused, s_paused },
+                                             cpp_box::state_machine::StateTransition{ States::Static, States::Begin_Build, s_can_start_build },
+                                             cpp_box::state_machine::StateTransition{ States::Static, States::Parse_Build_Results, s_build_ready },
+                                             cpp_box::state_machine::StateTransition{ States::Begin_Build, States::Static, s_failed },
+                                             cpp_box::state_machine::StateTransition{ States::Begin_Build, States::Running, s_running },
+                                             cpp_box::state_machine::StateTransition{ States::Begin_Build, States::Paused, s_paused },
+                                             cpp_box::state_machine::StateTransition{ States::Running, States::Begin_Build, s_can_start_build },
+                                             cpp_box::state_machine::StateTransition{ States::Running, States::Parse_Build_Results, s_build_ready },
+                                             cpp_box::state_machine::StateTransition{ States::Running, States::Reset, s_reset_pressed },
+                                             cpp_box::state_machine::StateTransition{ States::Running, States::Paused, s_paused },
+                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Reset, s_reset_pressed },
+                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Parse_Build_Results, s_build_ready },
+                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Running, s_running },
+                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Step_One, s_step_pressed },
+                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Begin_Build, s_can_start_build },
+                                             cpp_box::state_machine::StateTransition{ States::Parse_Build_Results, States::Reset, s_always_true },
+                                             cpp_box::state_machine::StateTransition{ States::Step_One, States::Step_One, s_step_pressed },
+                                             cpp_box::state_machine::StateTransition{ States::Step_One, States::Paused, s_always_true } };
 
     bool build_ready() const { return future_build.valid() && future_build.wait_for(std::chrono::microseconds(1)) == std::future_status::ready; }
     bool is_building() const { return future_build.valid(); }
@@ -347,38 +349,38 @@ struct Thing
                   status.sys.registers[15]);
       ImGui::Text("     NZCV                    IFT     ");
       ImGui::Text("CSPR %i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i",
-                  arm_thing::test_bit(status.sys.CSPR, 31),
-                  arm_thing::test_bit(status.sys.CSPR, 30),
-                  arm_thing::test_bit(status.sys.CSPR, 29),
-                  arm_thing::test_bit(status.sys.CSPR, 28),
-                  arm_thing::test_bit(status.sys.CSPR, 27),
-                  arm_thing::test_bit(status.sys.CSPR, 26),
-                  arm_thing::test_bit(status.sys.CSPR, 25),
-                  arm_thing::test_bit(status.sys.CSPR, 24),
-                  arm_thing::test_bit(status.sys.CSPR, 23),
-                  arm_thing::test_bit(status.sys.CSPR, 22),
-                  arm_thing::test_bit(status.sys.CSPR, 21),
-                  arm_thing::test_bit(status.sys.CSPR, 20),
-                  arm_thing::test_bit(status.sys.CSPR, 19),
-                  arm_thing::test_bit(status.sys.CSPR, 18),
-                  arm_thing::test_bit(status.sys.CSPR, 17),
-                  arm_thing::test_bit(status.sys.CSPR, 16),
-                  arm_thing::test_bit(status.sys.CSPR, 15),
-                  arm_thing::test_bit(status.sys.CSPR, 14),
-                  arm_thing::test_bit(status.sys.CSPR, 13),
-                  arm_thing::test_bit(status.sys.CSPR, 12),
-                  arm_thing::test_bit(status.sys.CSPR, 11),
-                  arm_thing::test_bit(status.sys.CSPR, 10),
-                  arm_thing::test_bit(status.sys.CSPR, 9),
-                  arm_thing::test_bit(status.sys.CSPR, 8),
-                  arm_thing::test_bit(status.sys.CSPR, 7),
-                  arm_thing::test_bit(status.sys.CSPR, 6),
-                  arm_thing::test_bit(status.sys.CSPR, 5),
-                  arm_thing::test_bit(status.sys.CSPR, 4),
-                  arm_thing::test_bit(status.sys.CSPR, 3),
-                  arm_thing::test_bit(status.sys.CSPR, 2),
-                  arm_thing::test_bit(status.sys.CSPR, 1),
-                  arm_thing::test_bit(status.sys.CSPR, 0));
+                  cpp_box::arm::test_bit(status.sys.CSPR, 31),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 30),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 29),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 28),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 27),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 26),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 25),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 24),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 23),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 22),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 21),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 20),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 19),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 18),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 17),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 16),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 15),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 14),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 13),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 12),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 11),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 10),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 9),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 8),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 7),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 6),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 5),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 4),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 3),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 2),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 1),
+                  cpp_box::arm::test_bit(status.sys.CSPR, 0));
     }
 
     ImGui::Text("Stack");
@@ -422,12 +424,12 @@ struct Thing
 
     console->set_level(spdlog::level::trace);
     console->set_pattern("[%Y-%m-%d %H:%M:%S %z] [%n] [%^%l%$] [thread %t] %v");
-    console->info("ARM Thing Starting");
+    console->info("C++ Box Starting");
     console->info("Original Path: {}", original_path.c_str());
 
 
     ImGui::CreateContext();
-    sf::RenderWindow window(sf::VideoMode(1024, 768), "ARM Thing");
+    sf::RenderWindow window(sf::VideoMode(1024, 768), "C++ Box");
 
 
     ImGui::SFML::Init(window);
@@ -507,7 +509,7 @@ struct Thing
 
 int main(const int argc, const char *argv[])
 {
-  Thing t;
+  Box box;
 
-  t.event_loop(argc == 2 ? argv[1] : "");
+  box.event_loop(argc == 2 ? argv[1] : "");
 }

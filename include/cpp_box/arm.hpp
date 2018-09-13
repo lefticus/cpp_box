@@ -4,7 +4,7 @@
 #include <iterator>
 #include <variant>
 
-namespace arm_thing {
+namespace cpp_box::arm {
 
 // necessary to deal with poor performing visit implementations from the std libs
 template<std::size_t Idx, typename F, typename V> constexpr decltype(auto) simple_visit_impl(F &&f, V &&t)
@@ -24,6 +24,7 @@ template<std::size_t Idx, typename F, typename V> constexpr decltype(auto) simpl
 }
 
 // Variation of the naive way: only loops as many times as there are set bits.
+// TODO Move into shared utility location
 template<typename T>[[nodiscard]] constexpr T popcnt(T v) noexcept
 {
   T c{ 0 };
@@ -37,6 +38,7 @@ template<typename F, typename V> constexpr decltype(auto) simple_visit(F &&f, V 
   return (simple_visit_impl<0>(std::forward<F>(f), std::forward<V>(t)));
 }
 
+// TODO Move into shared utility location
 template<typename Value, typename Bit>[[nodiscard]] constexpr bool test_bit(const Value val, const Bit bit) noexcept
 {
   return val & (static_cast<Value>(1) << bit);
@@ -46,7 +48,7 @@ template<typename Type, typename CRTP> struct Strongly_Typed
 {
   [[nodiscard]] constexpr auto data() const noexcept { return m_val; }
   [[nodiscard]] constexpr auto operator&(const Type rhs) const noexcept { return m_val & rhs; }
-  [[nodiscard]] constexpr bool test_bit(const Type bit) const noexcept { return arm_thing::test_bit(m_val, bit); }
+  [[nodiscard]] constexpr bool test_bit(const Type bit) const noexcept { return cpp_box::arm::test_bit(m_val, bit); }
 
   [[nodiscard]] friend constexpr auto operator&(const Type lhs, const CRTP rhs) noexcept { return lhs & rhs.m_val; }
 
@@ -824,4 +826,4 @@ template<std::size_t RAM_Size = 1024> struct System
 };
 
 
-}  // namespace arm_thing
+}  // namespace cpp_box::arm

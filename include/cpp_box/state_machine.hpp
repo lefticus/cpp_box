@@ -1,7 +1,7 @@
-#ifndef ARM_THING_STATE_MACHINE_HPP
-#define ARM_THING_STATE_MACHINE_HPP
+#ifndef CPP_BOX_STATE_MACHINE_HPP
+#define CPP_BOX_STATE_MACHINE_HPP
 
-namespace arm_thing {
+namespace cpp_box::state_machine {
 
 template<typename EnumType, typename Callable> struct StateTransition
 {
@@ -54,5 +54,5 @@ template<typename EnumType, typename... Callables> struct StateMachine
   }
 };
 
-}  // namespace arm_thing
+}  // namespace cpp_box::state_machine
 #endif
