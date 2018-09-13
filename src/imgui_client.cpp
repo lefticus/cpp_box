@@ -158,9 +158,22 @@ struct Thing
     float sprite_scale_factor{ 3.0 };
     bool paused{ false };
     sf::Clock framerateClock;
-    sf::Clock timer;
+
+    /// TODO: move somewhere shared
+    struct Timer
+    {
+      Timer(const float timeoutInSeconds) noexcept : timeout{ timeoutInSeconds } {}
+      bool expired() const noexcept { return timer.getElapsedTime().asSeconds() >= timeout; }
+      void reset() noexcept { timer.restart(); }
+
+    private:
+      sf::Clock timer;
+      float timeout;
+    };
+
 
     Loaded_Files loaded_files;
+    Timer static_timer{ 0.5f };
 
     bool build_good() const noexcept { return loaded_files.good_binary; }
     arm_thing::System<1024 * 1024> sys;
@@ -171,46 +184,41 @@ struct Thing
     static constexpr auto FPS               = 30;
     static constexpr const auto opsPerFrame = 10000000 / FPS;
 
+    static constexpr auto s_build_ready     = [](const auto &status, const auto &) { return status.build_ready(); };
+    static constexpr auto s_running         = [](const auto &status, const auto &) { return !status.paused && status.build_good(); };
+    static constexpr auto s_paused          = [](const auto &status, const auto &) { return status.paused && status.build_good(); };
+    static constexpr auto s_failed          = [](const auto &status, const auto &) { return !status.build_good(); };
+    static constexpr auto s_static_timer    = [](const auto &status, const auto &) { return !status.static_timer.expired(); };
+    static constexpr auto s_can_start_build = [](const auto &status, const auto &) { return status.needs_build && !status.is_building(); };
+    static constexpr auto s_always_true     = [](const auto &, const auto) { return true; };
+    static constexpr auto s_reset_pressed   = [](const auto &, const auto &inputs) { return inputs.reset_pressed; };
+    static constexpr auto s_step_pressed    = [](const auto &, const auto &inputs) { return inputs.step_pressed; };
 
-    static constexpr auto state_machine = arm_thing::StateMachine{
-      arm_thing::StateTransition{ States::Static,
-                                  States::Static,
-                                  [](const auto &status, const auto &) { return status.timer.getElapsedTime().asSeconds() < .5f; } },
-      arm_thing::StateTransition{ States::Static,
-                                  States::Running,
-                                  [](const auto &status, const auto &) { return !status.paused && status.build_good(); } },
-      arm_thing::StateTransition{ States::Static,
-                                  States::Paused,
-                                  [](const auto &status, const auto &) { return status.paused && status.build_good(); } },
-      arm_thing::StateTransition{ States::Static,
-                                  States::Begin_Build,
-                                  [](const auto &status, const auto &inputs) { return status.needs_build || inputs.source_changed; } },
-      arm_thing::StateTransition{ States::Begin_Build, States::Static, [](const auto &status, const auto &) { return !status.build_good(); } },
-      arm_thing::StateTransition{ States::Begin_Build, States::Running, [](const auto &status, const auto &) { return status.build_good(); } },
-      arm_thing::StateTransition{ States::Running,
-                                  States::Begin_Build,
-                                  [](const auto &status, const auto &inputs) { return status.needs_build || inputs.source_changed; } },
-      arm_thing::StateTransition{ States::Running,
-                                  States::Parse_Build_Results,
-                                  [](const auto &status, const auto &) { return status.build_ready(); } },
-      arm_thing::StateTransition{ States::Static,
-                                  States::Parse_Build_Results,
-                                  [](const auto &status, const auto &) { return status.build_ready(); } },
-      arm_thing::StateTransition{ States::Paused,
-                                  States::Parse_Build_Results,
-                                  [](const auto &status, const auto &) { return status.build_ready(); } },
-      arm_thing::StateTransition{ States::Running, States::Reset, [](const auto &, const auto &inputs) { return inputs.reset_pressed; } },
-      arm_thing::StateTransition{ States::Paused, States::Running, [](const auto &status, const auto &) { return !status.paused; } },
-      arm_thing::StateTransition{ States::Running, States::Paused, [](const auto &status, const auto &) { return status.paused; } },
-      arm_thing::StateTransition{ States::Parse_Build_Results, States::Reset, [](const auto &, const auto &) { return true; } },
-      arm_thing::StateTransition{ States::Reset, States::Reset_Timer, [](const auto &, const auto &) { return true; } },
-      arm_thing::StateTransition{ States::Reset_Timer, States::Static, [](const auto &, const auto &) { return true; } },
-      arm_thing::StateTransition{ States::Start, States::Reset, [](const auto &, const auto &) { return true; } },
-      arm_thing::StateTransition{ States::Paused, States::Step_One, [](const auto &, const auto &inputs) { return inputs.step_pressed; } },
-      arm_thing::StateTransition{ States::Step_One, States::Paused, [](const auto &, const auto &) { return true; } },
-    };
+    static constexpr auto state_machine =
+      arm_thing::StateMachine{ arm_thing::StateTransition{ States::Start, States::Reset, s_always_true },
+                               arm_thing::StateTransition{ States::Reset, States::Reset_Timer, s_always_true },
+                               arm_thing::StateTransition{ States::Reset_Timer, States::Static, s_always_true },
+                               arm_thing::StateTransition{ States::Static, States::Static, s_static_timer },
+                               arm_thing::StateTransition{ States::Static, States::Running, s_running },
+                               arm_thing::StateTransition{ States::Static, States::Paused, s_paused },
+                               arm_thing::StateTransition{ States::Static, States::Begin_Build, s_can_start_build },
+                               arm_thing::StateTransition{ States::Static, States::Parse_Build_Results, s_build_ready },
+                               arm_thing::StateTransition{ States::Begin_Build, States::Static, s_failed },
+                               arm_thing::StateTransition{ States::Begin_Build, States::Running, s_running },
+                               arm_thing::StateTransition{ States::Begin_Build, States::Paused, s_paused },
+                               arm_thing::StateTransition{ States::Running, States::Begin_Build, s_can_start_build },
+                               arm_thing::StateTransition{ States::Running, States::Parse_Build_Results, s_build_ready },
+                               arm_thing::StateTransition{ States::Running, States::Reset, s_reset_pressed },
+                               arm_thing::StateTransition{ States::Running, States::Paused, s_paused },
+                               arm_thing::StateTransition{ States::Paused, States::Parse_Build_Results, s_build_ready },
+                               arm_thing::StateTransition{ States::Paused, States::Running, s_running },
+                               arm_thing::StateTransition{ States::Paused, States::Step_One, s_step_pressed },
+                               arm_thing::StateTransition{ States::Paused, States::Begin_Build, s_can_start_build },
+                               arm_thing::StateTransition{ States::Parse_Build_Results, States::Reset, s_always_true },
+                               arm_thing::StateTransition{ States::Step_One, States::Paused, s_always_true } };
 
     bool build_ready() const { return future_build.valid() && future_build.wait_for(std::chrono::microseconds(1)) == std::future_status::ready; }
+    bool is_building() const { return future_build.valid(); }
 
     void reset()
     {
@@ -218,7 +226,7 @@ struct Thing
       sys.setup_run(static_cast<std::uint32_t>(loaded_files.entry_point));
     }
 
-    void reset_timer() { timer.restart(); }
+    void reset_static_timer() { static_timer.reset(); }
 
     void rescale_display(const float new_scale_factor, const float new_sprite_scale_factor)
     {
@@ -387,8 +395,9 @@ struct Thing
       }
       ImGui::BeginChild("Code", { available.x * 5 / 8, available.y });
       {
-        inputs.source_changed =
+        const auto source_changed =
           ImGui::InputTextMultiline("", status.loaded_files.src.data(), status.loaded_files.src.size(), ImGui::GetContentRegionAvail());
+        status.needs_build = status.needs_build || source_changed;
       }
       ImGui::EndChild();
       ImGui::SameLine();
@@ -453,8 +462,13 @@ struct Thing
         status.needs_build  = false;
         break;
       case Status::States::Parse_Build_Results:
-        status.loaded_files = status.future_build.get();
-        console->debug("Results Loaded");
+        if (!status.needs_build) {
+          status.loaded_files = status.future_build.get();
+          console->info("Results Loaded");
+        } else {
+          status.future_build.get();
+          console->info("Skipping results loading, build needed");
+        }
         break;
       case Status::States::Paused: break;
       case Status::States::Reset:
@@ -462,7 +476,7 @@ struct Thing
         status.texture.update(&status.sys.builtin_ram[0x10000]);
         break;
       case Status::States::Start: break;
-      case Status::States::Reset_Timer: status.reset_timer(); break;
+      case Status::States::Reset_Timer: status.reset_static_timer(); break;
       case Status::States::Step_One:
         status.sys.next_operation();
         status.texture.update(&status.sys.builtin_ram[0x10000]);
