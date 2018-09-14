@@ -1,3 +1,6 @@
+#ifndef CPP_BOX_ARM_HPP
+#define CPP_BOX_ARM_HPP
+
 #include <array>
 #include <tuple>
 #include <algorithm>
@@ -353,6 +356,24 @@ template<std::size_t RAM_Size = 1024> struct System
     }
   }
 
+  // read past end of allocated memory will return an unspecified value
+  [[nodiscard]] constexpr std::uint16_t read_half_word(const std::uint32_t loc) const noexcept
+  {
+    const std::uint8_t *data = [&]() -> const std::uint8_t * {
+      if (loc + 1 < RAM_Size) { return &builtin_ram[loc]; }
+      return nullptr;
+    }();
+
+    if (data) {
+      const std::uint32_t byte_1 = data[0];
+      const std::uint32_t byte_2 = data[1];
+
+      return static_cast<std::uint16_t>(byte_1) | static_cast<std::uint16_t>((byte_2 << 8));
+    } else {
+      return {};
+    }
+  }
+
 
   // read past end of allocated memory will return an unspecified value
   [[nodiscard]] constexpr std::uint32_t read_word(const std::uint32_t loc) const noexcept
@@ -371,6 +392,21 @@ template<std::size_t RAM_Size = 1024> struct System
       return byte_1 | (byte_2 << 8) | (byte_3 << 16) | (byte_4 << 24);
     } else {
       return {};
+    }
+  }
+
+  constexpr void write_half_word(const std::uint32_t loc, const std::uint16_t value) noexcept
+  {
+    auto *data = [&]() -> std::uint8_t * {
+      if (loc + 1 <= RAM_Size) { return &builtin_ram[loc]; }
+      return nullptr;
+    }();
+
+    if (data) {
+      data[0] = static_cast<std::uint8_t>(value & 0xFF);
+      data[1] = static_cast<std::uint8_t>((value >> 8) & 0xFF);
+    } else {
+      invalid_memory_write = true;
     }
   }
 
@@ -423,7 +459,7 @@ template<std::size_t RAM_Size = 1024> struct System
     // we'll be at the end of local RAM
     registers[14] = RAM_Size - 4;
     PC()          = loc + 4;
-    SP()          = 0x8000;
+    SP()          = RAM_Size - 1;
   }
 
   template<typename Tracer = void (*)(const System &, std::uint32_t, Instruction)>
@@ -826,4 +862,6 @@ template<std::size_t RAM_Size = 1024> struct System
 };
 
 
-}  // namespace cpp_box::arm
+}  // namespace cpp_box::arma
+
+#endif

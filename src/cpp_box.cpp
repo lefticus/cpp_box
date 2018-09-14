@@ -32,6 +32,37 @@
 
 struct Box
 {
+
+  constexpr static std::uint32_t TOTAL_RAM = 1024 * 1024 * 10;  // 10 MB
+  enum struct Memory_Map : std::uint32_t {
+    REGISTER_START = 0x00000000,
+    TOTAL_RAM      = REGISTER_START + 0x0000,
+    SCREEN_WIDTH   = REGISTER_START + 0x0004,  // 16bit screen width
+    SCREEN_HEIGHT  = REGISTER_START + 0x0006,  // 16bit screen height
+    SCREEN_BPP     = REGISTER_START + 0x0008,  // 8bit screen bits per pixel. Bits are divided evenly across the color space with preference given for
+    // the odd bit to green, then to blue. Special cases for 1 bpp and 2 bpp.
+    // 1 bpp: black or white
+    // 2 bpp: 2 levels of grey (0%, 33%, 66%, 100%)
+    // 3 bpp: 1 bit red, 1 bit green, 1 bit blue. Possible colors: black, white, red, green, blue, yellow, cyan, magenta).
+    // 4 bpp: 1 bit red, 2 bits green, 1 bit blue.
+    // 5 bpp: 1 bit red, 2 bits green, 2 bits blue.
+    // 6 bpp: 2 bits red, 2 bits green, 2 bits blue.
+    // 7 bpp: 2 bits red, 3 bits green, 2 bits blue.
+    // 8 bpp: 2 bits red, 3 bits green, 3 bits blue.
+    // etc
+    // 24 bpp: max value without alpha
+    // 32 bpp: 24 + alpha
+    // 0xA0009,  // 8bit screen refresh rate
+    // 0xA000A,  // 8bit Horizontal aspect
+    // 0xA000B,  // 8bit Vertical aspect
+    SCREEN_BUFFER  = REGISTER_START + 0x000C,  // 32bit pointer to current framebuffer
+    USER_RAM_START = REGISTER_START + 0x1000,  // leave more space for registers, this is where binaries will load
+  };
+
+  constexpr static std::uint32_t DEFAULT_SCREEN_BUFFER = TOTAL_RAM - (1024 * 1024 * 2);  // by default VRAM is 2 MB from top
+  constexpr static std::uint32_t STACK_START           = TOTAL_RAM - 1;
+
+
   template<typename Cont> static void dump_rom(const Cont &c)
   {
     std::size_t loc = 0;
@@ -176,7 +207,7 @@ struct Box
     Timer static_timer{ 0.5f };
 
     bool build_good() const noexcept { return loaded_files.good_binary; }
-    cpp_box::arm::System<1024 * 1024> sys;
+    cpp_box::arm::System<TOTAL_RAM> sys;
 
     sf::Texture texture;
     sf::Sprite sprite;
@@ -224,8 +255,16 @@ struct Box
 
     void reset()
     {
+      m_logger.trace("reset()");
       sys = decltype(sys){ loaded_files.image };
       sys.setup_run(static_cast<std::uint32_t>(loaded_files.entry_point));
+      assert(sys.SP() == STACK_START);
+      m_logger.trace("setting up registers");
+      sys.write_word(static_cast<std::uint32_t>(Memory_Map::TOTAL_RAM), TOTAL_RAM);
+      sys.write_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_WIDTH), 256);
+      sys.write_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_HEIGHT), 256);
+      sys.write_byte(static_cast<std::uint32_t>(Memory_Map::SCREEN_BPP), 32);
+      sys.write_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_BUFFER), DEFAULT_SCREEN_BUFFER);
     }
 
     void reset_static_timer() { static_timer.reset(); }
@@ -243,6 +282,7 @@ struct Box
     Status(spdlog::logger &logger, const std::filesystem::path &path)
       : m_logger{ logger }, loaded_files{ load_unknown(path, m_logger) }, sys{ loaded_files.image }
     {
+      m_logger.trace("Creating Status Object");
       if (!texture.create(256, 256)) { abort(); }
       sprite.setTexture(texture);
       scale_impl(scale_factor);
@@ -254,6 +294,25 @@ struct Box
       current_state         = state_machine.transition(current_state, *this, inputs);
       if (last_state != current_state) { m_logger.debug("StateTransition {} -> {}", to_string(last_state), to_string(current_state)); }
       return current_state;
+    }
+
+    void update_display()
+    {
+      sf::Vector2u size{ sys.read_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_WIDTH)),
+                         sys.read_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_HEIGHT)) };
+      if (size != texture.getSize()) {
+        texture.create(size.x, size.y);
+        //        sprite.setTexture(texture);
+      }
+
+      const auto display_loc = sys.read_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_BUFFER));
+      if (TOTAL_RAM - display_loc < size.x * size.y * 4) {
+        texture.update(&sys.builtin_ram[display_loc]);
+      } else {
+        // write as many lines as we can if we're past the end of RAM
+        const auto pixels_to_write = (TOTAL_RAM - display_loc) / 4;
+        texture.update(&sys.builtin_ram[display_loc], 0, 0, size.x, pixels_to_write / size.y);
+      }
     }
 
     std::string to_string(const States state)
@@ -384,7 +443,7 @@ struct Box
     }
 
     ImGui::Text("Stack");
-    const std::uint32_t stack_start = 0x8000;
+    const std::uint32_t stack_start = STACK_START;
     for (std::uint32_t idx = 0; idx < 40; idx += 4) { ImGui::Text("%08x: %08x", stack_start - idx, status.sys.read_word(stack_start - idx)); }
     ImGui::End();
 
@@ -436,8 +495,8 @@ struct Box
 
     sf::Clock deltaClock;
 
-    Status status{ *console, original_path };
-    window.setFramerateLimit(status.FPS);
+    Status status{*console, original_path};
+    window.setFramerateLimit(Status::FPS);
 
     while (window.isOpen()) {
 
@@ -454,7 +513,7 @@ struct Box
       switch (status.next_state(draw_interface(status))) {
       case Status::States::Running:
         for (int i = 0; i < status.opsPerFrame && status.sys.operations_remaining(); ++i) { status.sys.next_operation(); }
-        status.texture.update(&status.sys.builtin_ram[0x10000]);
+        status.update_display();
         break;
       case Status::States::Begin_Build:
         status.future_build = std::async(std::launch::async, [console = this->console, src = status.loaded_files.src]() {
@@ -475,14 +534,14 @@ struct Box
       case Status::States::Paused: break;
       case Status::States::Reset:
         status.reset();
-        status.texture.update(&status.sys.builtin_ram[0x10000]);
+        status.update_display();
         break;
       case Status::States::Start: break;
       case Status::States::Reset_Timer: status.reset_static_timer(); break;
       case Status::States::Step_One:
         if (status.sys.operations_remaining()) {
           status.sys.next_operation();
-          status.texture.update(&status.sys.builtin_ram[0x10000]);
+          status.update_display();
         }
         break;
       case Status::States::Static:
