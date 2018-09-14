@@ -1,4 +1,4 @@
-#include "arm_thing/arm.hpp"
+#include "cpp_box/arm.hpp"
 #include <string>
 #include <vector>
 #include <fstream>
@@ -68,7 +68,7 @@ int main(const int argc, const char *argv[])
       }
     }();
 
-    arm_thing::System sys{ RAM };
+    cpp_box::arm::System sys{ RAM };
     dump_rom(RAM);
 
     auto last_registers = sys.registers;

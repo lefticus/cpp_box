@@ -92,7 +92,7 @@ target_compile_definitions(relaxed_constexpr_tests PRIVATE RELAXED_CONSTEXPR=1)
 catch_discover_tests(relaxed_constexpr_tests TEST_PREFIX "relaxed_constexpr.")
 
 if(NOT ONLY_COVERAGE)
-  add_executable(arm_emu src/main.cpp)
+  add_executable(arm_emu src/arm_emu.cpp)
   target_link_libraries(arm_emu PRIVATE project_options project_warnings CONAN_PKG::rang)
 
   add_executable(elf_reader src/elf_reader.cpp)
@@ -125,8 +125,8 @@ if(NOT ONLY_COVERAGE)
   find_package(Threads REQUIRED)
 
   # imgui test executable, with full warnings enabled
-  add_executable(imgui_client src/imgui_client.cpp)
-  target_link_libraries(imgui_client
+  add_executable(cpp_box src/cpp_box.cpp)
+  target_link_libraries(cpp_box
                         PRIVATE project_options
                                 project_warnings
                                 utility
@@ -135,5 +135,5 @@ if(NOT ONLY_COVERAGE)
                                 fmt::fmt
                                 CONAN_PKG::rang
                                 CONAN_PKG::libpng)
-  target_include_directories(imgui_client SYSTEM PRIVATE external)
+  target_include_directories(cpp_box SYSTEM PRIVATE external)
 endif()
