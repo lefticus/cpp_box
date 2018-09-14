@@ -300,7 +300,7 @@ enum class Instruction_Type {
 }
 
 
-template<std::size_t RAM_Size = 1024> struct System
+template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_t, RAM_Size>> struct System
 {
   std::uint32_t CSPR{};
 
@@ -332,7 +332,20 @@ template<std::size_t RAM_Size = 1024> struct System
     std::uint32_t end{ 0 };
   };
 
-  std::array<std::uint8_t, RAM_Size> builtin_ram{};
+  static constexpr RAM_Type init_ram(const std::array<std::uint8_t, RAM_Size> &)
+  {
+    return RAM_Type{};
+  }
+
+  template<typename T>
+  static constexpr RAM_Type init_ram(const T &)
+  {
+    return RAM_Type(RAM_Size, 0);
+  }
+
+
+
+  RAM_Type builtin_ram{init_ram(builtin_ram)}; // just passing ourselves in to resolve the type
 
   constexpr void unhandled_instruction([[maybe_unused]] const Instruction ins, [[maybe_unused]] const Instruction_Type type) { abort(); }
 
@@ -368,7 +381,7 @@ template<std::size_t RAM_Size = 1024> struct System
       const std::uint32_t byte_1 = data[0];
       const std::uint32_t byte_2 = data[1];
 
-      return static_cast<std::uint16_t>(byte_1) | static_cast<std::uint16_t>((byte_2 << 8));
+      return static_cast<std::uint16_t>(byte_1 | (byte_2 << 8));
     } else {
       return {};
     }

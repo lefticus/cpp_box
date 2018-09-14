@@ -207,7 +207,7 @@ struct Box
     Timer static_timer{ 0.5f };
 
     bool build_good() const noexcept { return loaded_files.good_binary; }
-    cpp_box::arm::System<TOTAL_RAM> sys;
+    cpp_box::arm::System<TOTAL_RAM, std::vector<std::uint8_t>> sys;
 
     sf::Texture texture;
     sf::Sprite sprite;
@@ -301,17 +301,18 @@ struct Box
       sf::Vector2u size{ sys.read_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_WIDTH)),
                          sys.read_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_HEIGHT)) };
       if (size != texture.getSize()) {
+        m_logger.trace("Resizing screen to {}, {}", size.x, size.y);
         texture.create(size.x, size.y);
-        //        sprite.setTexture(texture);
+        sprite.setTexture(texture, true);
       }
 
       const auto display_loc = sys.read_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_BUFFER));
-      if (TOTAL_RAM - display_loc < size.x * size.y * 4) {
+      if (TOTAL_RAM - display_loc >= size.x * size.y * 4) {
         texture.update(&sys.builtin_ram[display_loc]);
       } else {
         // write as many lines as we can if we're past the end of RAM
-        const auto pixels_to_write = (TOTAL_RAM - display_loc) / 4;
-        texture.update(&sys.builtin_ram[display_loc], 0, 0, size.x, pixels_to_write / size.y);
+        const auto pixels_to_write = std::min(size.x * size.y, (TOTAL_RAM - display_loc) / 4);
+        texture.update(&sys.builtin_ram[display_loc], 0, 0, size.x, pixels_to_write / size.x);
       }
     }
 

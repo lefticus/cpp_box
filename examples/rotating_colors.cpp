@@ -27,12 +27,13 @@ struct RGBA {
 };
 
 void write_pixel(int x, int y, RGBA val) {
-  poke(0x10000 + ((y * 256) + x) * 4, val);
+  poke(1024*1024*8 + ((y * 256) + x) * 4, val);
 }
 
 int main() {
   //  std::array<RGB, 256 * 256> buffer{};
-
+  poke(4, std::uint8_t{128});
+  poke(5, std::uint8_t{0});
   for (std::uint8_t frame = 0; true; ++frame) {
     for (int x = 0; x < 256; ++x) {
       for (int y = 0; y < 256; ++y) {
