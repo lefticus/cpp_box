@@ -88,6 +88,7 @@ struct Box
     std::basic_string_view<std::uint8_t> image;
     std::uint64_t entry_point{};
     bool good_binary{ false };
+    std::unordered_map<std::uint32_t, std::string> disassembly;
   };
 
 
@@ -112,7 +113,7 @@ struct Box
               const auto main_file_offset = static_cast<std::uint32_t>(main_section.offset() + symbol_table_entry.value());
               logger.info(
                 "'main' symbol found in '{}':{} file offset: {}", main_section.name(sh_string_table), symbol_table_entry.value(), main_file_offset);
-              return Loaded_Files{ "", "", std::move(data), data_view, main_file_offset, true };
+              return Loaded_Files{ "", "", std::move(data), data_view, main_file_offset, true, {} };
             }
           }
         }
@@ -122,7 +123,7 @@ struct Box
     // if we make it here it's not an elf file or doesn't have main, assuming a src file
     logger.info("Didn't find a main, assuming C++ src file");
 
-    return { std::string{ data->begin(), data->end() }, "", {}, {}, {}, false };
+    return { std::string{ data->begin(), data->end() }, "", {}, {}, {}, false, {} };
   }
 
 
@@ -138,9 +139,10 @@ struct Box
     cpp_box::utility::Temp_Directory dir("ARM_THING");
 
     logger.debug("Using dir: '{}'", dir.dir().c_str());
-    const auto cpp_file = dir.dir() / "src.cpp";
-    const auto asm_file = dir.dir() / "src.s";
-    const auto obj_file = dir.dir() / "src.o";
+    const auto cpp_file         = dir.dir() / "src.cpp";
+    const auto asm_file         = dir.dir() / "src.s";
+    const auto obj_file         = dir.dir() / "src.o";
+    const auto disassembly_file = dir.dir() / "src.dis";
 
     if (std::ofstream ofs(cpp_file); ofs.good()) {
       ofs.write(t_str.data(), static_cast<std::streamsize>(t_str.size()));
@@ -153,22 +155,51 @@ struct Box
                                            cpp_file.c_str(),
                                            obj_file.c_str(),
                                            t_optimization_level);
-    std::system(build_command.c_str());
-
     logger.debug("Executing compile command: '{}'", build_command);
+    std::system(build_command.c_str());
     const auto assembly = cpp_box::utility::read_file(asm_file);
     auto loaded         = load_unknown(obj_file, logger);
 
-    const std::regex strip_attributes{ "\\n\\s+\\..*", std::regex::ECMAScript };
 
+    const auto disassemble_command =
+      fmt::format("{} -disassemble {} > {}", (t_compiler.parent_path() / "llvm-objdump").c_str(), obj_file.c_str(), disassembly_file.c_str());
+    logger.debug("Executing disassemble command: '{}'", disassemble_command);
+    std::system(disassemble_command.c_str());
+
+
+    const std::regex strip_attributes{ "\\n\\s+\\..*", std::regex::ECMAScript };
     dump_rom(loaded.image);
+
+    const auto parse_disassembly = [&logger](const std::string &file) {
+      const std::regex read_disassembly{ ".*\\t(..) (..) (..) (..) \\t(.*)" };
+      std::stringstream ss{ file };
+      std::unordered_map<std::uint32_t, std::string> disassembly;
+      for (std::string line; std::getline(ss, line);) {
+        if (std::smatch results; std::regex_match(line, results, read_disassembly)) {
+          //          logger.trace(
+          //            "Parsed disassembly line: '{}' '{}' '{}' '{}' '{}'", results.str(1), results.str(2), results.str(3), results.str(4),
+          //            results.str(5));
+          const auto b1    = static_cast<std::uint32_t>(std::stoi(results.str(1), nullptr, 16));
+          const auto b2    = static_cast<std::uint32_t>(std::stoi(results.str(2), nullptr, 16));
+          const auto b3    = static_cast<std::uint32_t>(std::stoi(results.str(3), nullptr, 16));
+          const auto b4    = static_cast<std::uint32_t>(std::stoi(results.str(4), nullptr, 16));
+          const auto value = (b4 << 24) | (b3 << 16) | (b2 << 8) | b1;
+          logger.trace("Disassembly: '{:08x}', '{}'", value, results.str(5));
+          disassembly[value] = results.str(5);
+        }
+      }
+      return disassembly;
+    };
+
+    const auto disassembly = cpp_box::utility::read_file(disassembly_file);
 
     return Loaded_Files{ t_str,
                          std::regex_replace(std::string{ assembly.begin(), assembly.end() }, strip_attributes, ""),
                          std::move(loaded.binary_file),
                          loaded.image,
                          static_cast<std::uint32_t>(loaded.entry_point),
-                         loaded.good_binary };
+                         loaded.good_binary,
+                         parse_disassembly(std::string(disassembly.begin(), disassembly.end())) };
   }
 
   struct Inputs
@@ -178,16 +209,19 @@ struct Box
     bool source_changed{ false };
   };
 
+  struct Goal;
+
   struct Status
   {
-    enum class States { Static, Running, Begin_Build, Paused, Parse_Build_Results, Reset, Reset_Timer, Start, Step_One };
+    enum class States { Static, Running, Begin_Build, Paused, Parse_Build_Results, Reset, Reset_Timer, Start, Step_One, Check_Goal };
 
     spdlog::logger &m_logger;
 
     States current_state{ States::Start };
-    float scale_factor{ 1.0 };
+    float scale_factor{ 2.0 };
     float sprite_scale_factor{ 3.0 };
     bool paused{ false };
+    bool show_assembly{ false };
     sf::Clock framerateClock;
 
     /// TODO: move somewhere shared
@@ -208,6 +242,8 @@ struct Box
 
     bool build_good() const noexcept { return loaded_files.good_binary; }
     cpp_box::arm::System<TOTAL_RAM, std::vector<std::uint8_t>> sys;
+    std::vector<Goal> goals;
+    std::size_t current_goal{ 0 };
 
     sf::Texture texture;
     sf::Sprite sprite;
@@ -215,15 +251,18 @@ struct Box
     static constexpr auto FPS               = 30;
     static constexpr const auto opsPerFrame = 10000000 / FPS;
 
-    static constexpr auto s_build_ready     = [](const auto &status, const auto &) { return status.build_ready(); };
-    static constexpr auto s_running         = [](const auto &status, const auto &) { return !status.paused && status.build_good(); };
-    static constexpr auto s_paused          = [](const auto &status, const auto &) { return status.paused && status.build_good(); };
-    static constexpr auto s_failed          = [](const auto &status, const auto &) { return !status.build_good(); };
-    static constexpr auto s_static_timer    = [](const auto &status, const auto &) { return !status.static_timer.expired(); };
-    static constexpr auto s_can_start_build = [](const auto &status, const auto &) { return status.needs_build && !status.is_building(); };
-    static constexpr auto s_always_true     = [](const auto &, const auto &) { return true; };
-    static constexpr auto s_reset_pressed   = [](const auto &, const auto &inputs) { return inputs.reset_pressed; };
-    static constexpr auto s_step_pressed    = [](const auto &, const auto &inputs) { return inputs.step_pressed; };
+    static constexpr auto s_build_ready       = [](const auto &status, const auto &) { return status.build_ready(); };
+    static constexpr auto s_running           = [](const auto &status, const auto &) { return !status.paused && status.build_good(); };
+    static constexpr auto s_paused            = [](const auto &status, const auto &) { return status.paused && status.build_good(); };
+    static constexpr auto s_failed            = [](const auto &status, const auto &) { return !status.build_good(); };
+    static constexpr auto s_static_timer      = [](const auto &status, const auto &) { return !status.static_timer.expired(); };
+    static constexpr auto s_can_start_build   = [](const auto &status, const auto &) { return status.needs_build && !status.is_building(); };
+    static constexpr auto s_always_true       = [](const auto &, const auto &) { return true; };
+    static constexpr auto s_reset_pressed     = [](const auto &, const auto &inputs) { return inputs.reset_pressed; };
+    static constexpr auto s_step_pressed      = [](const auto &, const auto &inputs) { return inputs.step_pressed; };
+    static constexpr auto s_goal_check_needed = [](const auto &status, const auto &) {
+      return !status.goals[status.current_goal].completed && !status.sys.operations_remaining();
+    };
 
     static constexpr auto state_machine =
       cpp_box::state_machine::StateMachine{ cpp_box::state_machine::StateTransition{ States::Start, States::Reset, s_always_true },
@@ -241,6 +280,7 @@ struct Box
                                             cpp_box::state_machine::StateTransition{ States::Running, States::Parse_Build_Results, s_build_ready },
                                             cpp_box::state_machine::StateTransition{ States::Running, States::Reset, s_reset_pressed },
                                             cpp_box::state_machine::StateTransition{ States::Running, States::Paused, s_paused },
+                                            cpp_box::state_machine::StateTransition{ States::Running, States::Check_Goal, s_goal_check_needed },
                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Reset, s_reset_pressed },
                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Parse_Build_Results, s_build_ready },
                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Running, s_running },
@@ -248,7 +288,9 @@ struct Box
                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Begin_Build, s_can_start_build },
                                             cpp_box::state_machine::StateTransition{ States::Parse_Build_Results, States::Reset, s_always_true },
                                             cpp_box::state_machine::StateTransition{ States::Step_One, States::Step_One, s_step_pressed },
-                                            cpp_box::state_machine::StateTransition{ States::Step_One, States::Paused, s_always_true } };
+                                            cpp_box::state_machine::StateTransition{ States::Step_One, States::Check_Goal, s_goal_check_needed },
+                                            cpp_box::state_machine::StateTransition{ States::Step_One, States::Paused, s_always_true },
+                                            cpp_box::state_machine::StateTransition{ States::Check_Goal, States::Paused, s_always_true } };
 
     bool build_ready() const { return future_build.valid() && future_build.wait_for(std::chrono::microseconds(1)) == std::future_status::ready; }
     bool is_building() const { return future_build.valid(); }
@@ -261,8 +303,8 @@ struct Box
       assert(sys.SP() == STACK_START);
       m_logger.trace("setting up registers");
       sys.write_word(static_cast<std::uint32_t>(Memory_Map::TOTAL_RAM), TOTAL_RAM);
-      sys.write_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_WIDTH), 256);
-      sys.write_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_HEIGHT), 256);
+      sys.write_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_WIDTH), 64);
+      sys.write_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_HEIGHT), 64);
       sys.write_byte(static_cast<std::uint32_t>(Memory_Map::SCREEN_BPP), 32);
       sys.write_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_BUFFER), DEFAULT_SCREEN_BUFFER);
     }
@@ -279,13 +321,13 @@ struct Box
       }
     }
 
-    Status(spdlog::logger &logger, const std::filesystem::path &path)
-      : m_logger{ logger }, loaded_files{ load_unknown(path, m_logger) }, sys{ loaded_files.image }
+    Status(spdlog::logger &logger, const std::filesystem::path &path, std::vector<Goal> t_goals)
+      : m_logger{ logger }, loaded_files{ load_unknown(path, m_logger) }, sys{ loaded_files.image }, goals{ std::move(t_goals) }
     {
       m_logger.trace("Creating Status Object");
       if (!texture.create(256, 256)) { abort(); }
       sprite.setTexture(texture);
-      scale_impl(scale_factor);
+      scale_impl(1.0f);
     }
 
     States next_state(const Inputs inputs)
@@ -328,6 +370,7 @@ struct Box
       case States::Reset_Timer: return "Reset_Timer";
       case States::Start: return "Start";
       case States::Step_One: return "Step_One";
+      case States::Check_Goal: return "Check_Goal";
       }
       return "Unknown";
     }
@@ -349,7 +392,6 @@ struct Box
   Inputs draw_interface(Status &status)
   {
     Inputs inputs;
-
     ImGui::Begin("Controls", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
     {
       if (status.paused) {
@@ -386,7 +428,7 @@ struct Box
     }
     ImGui::End();
 
-    ImGui::Begin("Registers", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+    ImGui::Begin("State", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
     {
       ImGui::Text("R0 %08x R1 %08x R2  %08x R3  %08x R4  %08x R5 %08x R6 %08x R7 %08x",
                   status.sys.registers[0],
@@ -441,21 +483,44 @@ struct Box
                   cpp_box::arm::test_bit(status.sys.CSPR, 2),
                   cpp_box::arm::test_bit(status.sys.CSPR, 1),
                   cpp_box::arm::test_bit(status.sys.CSPR, 0));
-    }
 
-    ImGui::Text("Stack");
-    const std::uint32_t stack_start = STACK_START;
-    for (std::uint32_t idx = 0; idx < 40; idx += 4) { ImGui::Text("%08x: %08x", stack_start - idx, status.sys.read_word(stack_start - idx)); }
+      if (ImGui::CollapsingHeader("Memory")) {
+        const auto sp                   = status.sys.SP();
+        const std::uint32_t stack_start = sp > STACK_START - 5 * 4 ? STACK_START : sp;
+        const auto pc                   = status.sys.PC() - 4;
+        const std::uint32_t pc_start    = pc < 5 * 4 ? 0 : pc - 5 * 4;
+
+        ImGui::Text("Stack Pointer (SP)     Next Instruction (PC-4)");
+
+        for (std::uint32_t idx = 0; idx < 44; idx += 4) {
+          const auto sp_loc = stack_start - idx;
+          if (sp_loc == sp) {
+            ImGui::Text("%08x: %08x    ", sp_loc, status.sys.read_word(sp_loc));
+          } else {
+            ImGui::TextDisabled("%08x: %08x    ", sp_loc, status.sys.read_word(sp_loc));
+          }
+          ImGui::SameLine();
+          const auto pc_loc = pc_start + idx;
+          const auto word   = status.sys.read_word(pc_loc);
+          if (pc_loc == pc) {
+            ImGui::Text("%08x: %08x %s", pc_loc, word, status.loaded_files.disassembly[word].c_str());
+          } else {
+            ImGui::TextDisabled("%08x: %08x %s", pc_loc, word, status.loaded_files.disassembly[word].c_str());
+          }
+        }
+      }
+    }
     ImGui::End();
 
 
     ImGui::Begin("C++");
     {
-      const auto available = ImGui::GetContentRegionAvail();
       if (status.loaded_files.src.size() - strlen(status.loaded_files.src.c_str()) < 256) {
         status.loaded_files.src.resize(status.loaded_files.src.size() + 512);
       }
-      ImGui::BeginChild("Code", { available.x * 5 / 8, available.y });
+      ImGui::Checkbox("Show Assembly", &status.show_assembly);
+      const auto available = ImGui::GetContentRegionAvail();
+      ImGui::BeginChild("Code", { status.show_assembly ? (available.x * 5 / 8) : available.x, available.y });
       {
         const auto source_changed =
           ImGui::InputTextMultiline("", status.loaded_files.src.data(), status.loaded_files.src.size(), ImGui::GetContentRegionAvail());
@@ -463,21 +528,74 @@ struct Box
       }
       ImGui::EndChild();
       ImGui::SameLine();
-      ImGui::BeginChild("Code Output", ImGui::GetContentRegionAvail());
-      {
-        ImGui::InputTextMultiline(
-          "", status.loaded_files.assembly.data(), status.loaded_files.assembly.size(), ImGui::GetContentRegionAvail(), ImGuiInputTextFlags_ReadOnly);
+      if (status.show_assembly) {
+        ImGui::BeginChild("Assembly", ImGui::GetContentRegionAvail());
+        {
+          ImGui::InputTextMultiline("",
+                                    status.loaded_files.assembly.data(),
+                                    status.loaded_files.assembly.size(),
+                                    ImGui::GetContentRegionAvail(),
+                                    ImGuiInputTextFlags_ReadOnly);
+        }
+        ImGui::EndChild();
       }
-      ImGui::EndChild();
+    }
+    ImGui::End();
+
+    ImGui::Begin("Goals", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+    {
+      int current_goal = status.current_goal;
+      ImGui::SliderInt("Current Goal", &current_goal, 0, status.goals.size() - 1);
+      status.current_goal = current_goal;
+      auto &goal          = status.goals.at(status.current_goal);
+      ImGui::Separator();
+      bool completed = goal.completed;
+      ImGui::Checkbox("", &completed);
+      ImGui::SameLine();
+      ImGui::Text(goal.name.c_str());
+      ImGui::Text(goal.description.c_str());
+      for (std::size_t clue = 0; clue < goal.hints.size(); ++clue) {
+        if (ImGui::CollapsingHeader(fmt::format("Show Hint #{}", clue).c_str())) { ImGui::Text(goal.hints[clue].c_str()); }
+      }
     }
     ImGui::End();
 
     return inputs;
   }
 
+  struct Goal
+  {
+    std::string name;
+    std::string description;
+    std::vector<std::string> hints;
+    std::function<bool(const Status &)> completion_state;
+    std::size_t hints_shown{ 0 };
+    bool completed{ false };
+  };
+
+  static std::vector<Goal> generate_goals()
+  {
+    return { { "Compile a Program",
+               "Make a simple program with a `main` function that compiles\nand produces a binary and returns 0",
+               { "a simple `main` in C++ has this signature: `int main();`",
+                 "0 is returned by default",
+                 "Your program should look something like: `int main() {}`" },
+               [](const Status &s) -> bool { return s.sys.registers[0] == 0; },
+               0,
+               false },
+             { "Return 5 From Main",
+               "Make a simple program with a `main` function that compiles\nand produces a binary and returns 5",
+               { "To make a function return a value, you use the `return` keyword",
+                 "0 is returned by default",
+                 "Your program should look something like: `int main() { return 5; }`" },
+               [](const Status &s) -> bool { return s.sys.registers[0] == 5; },
+               0,
+               false } };
+  }
+
+
   void event_loop(const std::filesystem::path &original_path)
   {
-
     std::uniform_int_distribution<std::uint8_t> distribution(0, 255);
     std::default_random_engine generator;
 
@@ -496,7 +614,7 @@ struct Box
 
     sf::Clock deltaClock;
 
-    Status status{*console, original_path};
+    Status status{ *console, original_path, generate_goals() };
     window.setFramerateLimit(Status::FPS);
 
     while (window.isOpen()) {
@@ -545,11 +663,17 @@ struct Box
           status.update_display();
         }
         break;
-      case Status::States::Static:
+      case Status::States::Static: {
         const auto texture_size = status.texture.getSize();
         std::vector<std::uint8_t> data(texture_size.x * texture_size.y * 4);
         std::generate(data.begin(), data.end(), [&distribution, &generator]() { return distribution(generator); });
         status.texture.update(data.data());
+      } break;
+      case Status::States::Check_Goal:
+        if (status.current_goal <= status.goals.size() && status.goals[status.current_goal].completion_state(status)) {
+          status.goals[status.current_goal].completed = true;
+          status.current_goal = std::min(status.current_goal + 1, status.goals.size() - 1);
+        }
         break;
       }
 
