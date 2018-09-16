@@ -7,7 +7,7 @@
 
 It implements a partial ARMv4 architecture in software.
 
-For code this can accept, use gcc or clang in `-march=armv4` mode.
+For code this can accept, use gcc or clang in `-march=armv4` mode. Almost all builds of clang but default support `--target=armv4-linux` regardless of your host platform.
 
 ## Getting Started
 ### Prerequisites
