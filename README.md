@@ -9,6 +9,18 @@ It implements a partial ARMv4 architecture in software.
 
 For code this can accept, use gcc or clang in `-march=armv4` mode. Almost all builds of clang but default support `--target=armv4-linux` regardless of your host platform.
 
+## Architecture Documentation
+
+For more information on the ARMv4 architecture, look for documentation on the ARM7 core.
+
+ * We are not currently attempting to support Thumb mode
+ * Only supporting little endian is supported
+ * For details on the implementation we are aiming for, look at the ARM7TDMI manual
+    * http://infocenter.arm.com/help/topic/com.arm.doc.ddi0210c/index.html
+    * http://infocenter.arm.com/help/topic/com.arm.doc.ddi0210c/DDI0210B.pdf See 1-12 for instruction format
+
+
+
 ## Getting Started
 ### Prerequisites
 
@@ -45,8 +57,22 @@ cmake ..
 ```
 
 ## Running the tests
+
 After successfully finishing build process, run test to see if everything is work.
-To do so, simply go to `build/bin` folder and run the tests.
+
+You can use ctest
+
+```
+$ ctest
+```
+
+Or make
+
+```
+$ make test
+```
+
+Or execute the tests directly. To do so, simply go to `build/bin` folder and run the tests.
 
 
 ```
