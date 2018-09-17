@@ -9,9 +9,9 @@ build_script:
     
     pip install --user conan
 
-    conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
+    C:\Users\appveyor\AppData\Roaming\Python\Scripts\conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
 
-    conan install .. --build missing
+    C:\Users\appveyor\AppData\Roaming\Python\Scripts\conan install .. --build missing
 
     cmake c:\projects\source -G "Visual Studio 15"
     
