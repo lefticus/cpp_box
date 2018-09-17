@@ -13,6 +13,8 @@
 #include <filesystem>
 #include <random>
 #include <future>
+#include <sstream>
+#include <memory>
 
 #include "imgui/lib/imgui.h"
 #include "imgui/lib/imgui-SFML.h"
@@ -95,11 +97,11 @@ struct Box
   static Loaded_Files load_unknown(const std::filesystem::path &t_path, spdlog::logger &logger)
   {
     auto data = std::make_unique<std::vector<std::uint8_t>>(cpp_box::utility::read_file(t_path));
-    logger.info("Loading unknown file type: '{}', file exists? {}", t_path.c_str(), std::filesystem::exists(t_path));
+    logger.info("Loading unknown file type: '{}', file exists? {}", t_path.string(), std::filesystem::exists(t_path));
 
     if (data->size() >= 64) {
       const auto file_header = cpp_box::elf::File_Header{ { data->data(), data->size() } };
-      logger.info("'{}' is ELF?: {}", t_path.c_str(), file_header.is_elf_file());
+      logger.info("'{}' is ELF?: {}", t_path.string(), file_header.is_elf_file());
       if (file_header.is_elf_file()) {
         const auto sh_string_table = file_header.sh_string_table();
 
@@ -138,7 +140,7 @@ struct Box
 
     cpp_box::utility::Temp_Directory dir("ARM_THING");
 
-    logger.debug("Using dir: '{}'", dir.dir().c_str());
+    logger.debug("Using dir: '{}'", dir.dir().string());
     const auto cpp_file         = dir.dir() / "src.cpp";
     const auto asm_file         = dir.dir() / "src.s";
     const auto obj_file         = dir.dir() / "src.o";
@@ -149,20 +151,29 @@ struct Box
       ofs.flush();  // make sure OS flushes file before clang tries to load it
     }
 
-    const auto build_command = fmt::format("{} -std={} {} -c -o {} -O{} -save-temps=obj --target=armv4-linux -stdlib=libc++",
-                                           t_compiler.c_str(),
-                                           t_standard,
-                                           cpp_file.c_str(),
-                                           obj_file.c_str(),
-                                           t_optimization_level);
+    const auto quote_command = [](const std::string &str) {
+#if defined(_MSC_VER)
+      return '"' + str + '"';
+#else
+      return str;
+#endif
+    };
+
+    const auto build_command = quote_command(fmt::format(R"("{}" -std={} "{}" -c -o "{}" -O{} -save-temps=obj --target=armv4-linux -stdlib=libc++)",
+                                                         t_compiler.string(),
+                                                         std::string(t_standard),
+                                                         cpp_file.string(),
+                                                         obj_file.string(),
+                                                         std::string(t_optimization_level)));
+
     logger.debug("Executing compile command: '{}'", build_command);
     std::system(build_command.c_str());
     const auto assembly = cpp_box::utility::read_file(asm_file);
     auto loaded         = load_unknown(obj_file, logger);
 
 
-    const auto disassemble_command =
-      fmt::format("{} -disassemble {} > {}", (t_compiler.parent_path() / "llvm-objdump").c_str(), obj_file.c_str(), disassembly_file.c_str());
+    const auto disassemble_command = quote_command(fmt::format(
+      R"("{}" -disassemble "{}" > "{}")", (t_compiler.parent_path() / "llvm-objdump").string(), obj_file.string(), disassembly_file.string()));
     logger.debug("Executing disassemble command: '{}'", disassemble_command);
     std::system(disassemble_command.c_str());
 
@@ -241,7 +252,7 @@ struct Box
     Timer static_timer{ 0.5f };
 
     bool build_good() const noexcept { return loaded_files.good_binary; }
-    cpp_box::arm::System<TOTAL_RAM, std::vector<std::uint8_t>> sys;
+    std::unique_ptr<cpp_box::arm::System<TOTAL_RAM, std::vector<std::uint8_t>>> sys;
     std::vector<Goal> goals;
     std::size_t current_goal{ 0 };
 
@@ -261,7 +272,7 @@ struct Box
     static constexpr auto s_reset_pressed     = [](const auto &, const auto &inputs) { return inputs.reset_pressed; };
     static constexpr auto s_step_pressed      = [](const auto &, const auto &inputs) { return inputs.step_pressed; };
     static constexpr auto s_goal_check_needed = [](const auto &status, const auto &) {
-      return !status.goals[status.current_goal].completed && !status.sys.operations_remaining();
+      return !status.goals[status.current_goal].completed && !status.sys->operations_remaining();
     };
 
     static constexpr auto state_machine =
@@ -298,15 +309,15 @@ struct Box
     void reset()
     {
       m_logger.trace("reset()");
-      sys = decltype(sys){ loaded_files.image };
-      sys.setup_run(static_cast<std::uint32_t>(loaded_files.entry_point));
-      assert(sys.SP() == STACK_START);
+      sys = std::make_unique<decltype(sys)::element_type>(loaded_files.image);
+      sys->setup_run(static_cast<std::uint32_t>(loaded_files.entry_point));
+      assert(sys->SP() == STACK_START);
       m_logger.trace("setting up registers");
-      sys.write_word(static_cast<std::uint32_t>(Memory_Map::TOTAL_RAM), TOTAL_RAM);
-      sys.write_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_WIDTH), 64);
-      sys.write_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_HEIGHT), 64);
-      sys.write_byte(static_cast<std::uint32_t>(Memory_Map::SCREEN_BPP), 32);
-      sys.write_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_BUFFER), DEFAULT_SCREEN_BUFFER);
+      sys->write_word(static_cast<std::uint32_t>(Memory_Map::TOTAL_RAM), TOTAL_RAM);
+      sys->write_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_WIDTH), 64);
+      sys->write_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_HEIGHT), 64);
+      sys->write_byte(static_cast<std::uint32_t>(Memory_Map::SCREEN_BPP), 32);
+      sys->write_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_BUFFER), DEFAULT_SCREEN_BUFFER);
     }
 
     void reset_static_timer() { static_timer.reset(); }
@@ -322,7 +333,10 @@ struct Box
     }
 
     Status(spdlog::logger &logger, const std::filesystem::path &path, std::vector<Goal> t_goals)
-      : m_logger{ logger }, loaded_files{ load_unknown(path, m_logger) }, sys{ loaded_files.image }, goals{ std::move(t_goals) }
+      : m_logger{ logger }
+      , loaded_files{ load_unknown(path, m_logger) }
+      , sys{ std::make_unique<decltype(sys)::element_type>(loaded_files.image) }
+      , goals{ std::move(t_goals) }
     {
       m_logger.trace("Creating Status Object");
       if (!texture.create(256, 256)) { abort(); }
@@ -340,21 +354,21 @@ struct Box
 
     void update_display()
     {
-      sf::Vector2u size{ sys.read_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_WIDTH)),
-                         sys.read_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_HEIGHT)) };
+      sf::Vector2u size{ sys->read_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_WIDTH)),
+                         sys->read_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_HEIGHT)) };
       if (size != texture.getSize()) {
         m_logger.trace("Resizing screen to {}, {}", size.x, size.y);
         texture.create(size.x, size.y);
         sprite.setTexture(texture, true);
       }
 
-      const auto display_loc = sys.read_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_BUFFER));
+      const auto display_loc = sys->read_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_BUFFER));
       if (TOTAL_RAM - display_loc >= size.x * size.y * 4) {
-        texture.update(&sys.builtin_ram[display_loc]);
+        texture.update(&sys->builtin_ram[display_loc]);
       } else {
         // write as many lines as we can if we're past the end of RAM
         const auto pixels_to_write = std::min(size.x * size.y, (TOTAL_RAM - display_loc) / 4);
-        texture.update(&sys.builtin_ram[display_loc], 0, 0, size.x, pixels_to_write / size.x);
+        texture.update(&sys->builtin_ram[display_loc], 0, 0, size.x, pixels_to_write / size.x);
       }
     }
 
@@ -431,63 +445,63 @@ struct Box
     ImGui::Begin("State", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
     {
       ImGui::Text("R0 %08x R1 %08x R2  %08x R3  %08x R4  %08x R5 %08x R6 %08x R7 %08x",
-                  status.sys.registers[0],
-                  status.sys.registers[1],
-                  status.sys.registers[2],
-                  status.sys.registers[3],
-                  status.sys.registers[4],
-                  status.sys.registers[5],
-                  status.sys.registers[6],
-                  status.sys.registers[7]);
+                  status.sys->registers[0],
+                  status.sys->registers[1],
+                  status.sys->registers[2],
+                  status.sys->registers[3],
+                  status.sys->registers[4],
+                  status.sys->registers[5],
+                  status.sys->registers[6],
+                  status.sys->registers[7]);
 
       ImGui::Text("R8 %08x R9 %08x R10 %08x R11 %08x R12 %08x SP %08x LR %08x PC %08x",
-                  status.sys.registers[8],
-                  status.sys.registers[9],
-                  status.sys.registers[10],
-                  status.sys.registers[11],
-                  status.sys.registers[12],
-                  status.sys.registers[13],
-                  status.sys.registers[14],
-                  status.sys.registers[15]);
+                  status.sys->registers[8],
+                  status.sys->registers[9],
+                  status.sys->registers[10],
+                  status.sys->registers[11],
+                  status.sys->registers[12],
+                  status.sys->registers[13],
+                  status.sys->registers[14],
+                  status.sys->registers[15]);
       ImGui::Text("     NZCV                    IFT     ");
       ImGui::Text("CSPR %i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i",
-                  cpp_box::arm::test_bit(status.sys.CSPR, 31),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 30),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 29),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 28),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 27),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 26),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 25),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 24),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 23),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 22),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 21),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 20),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 19),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 18),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 17),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 16),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 15),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 14),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 13),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 12),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 11),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 10),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 9),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 8),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 7),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 6),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 5),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 4),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 3),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 2),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 1),
-                  cpp_box::arm::test_bit(status.sys.CSPR, 0));
+                  cpp_box::arm::test_bit(status.sys->CSPR, 31),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 30),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 29),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 28),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 27),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 26),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 25),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 24),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 23),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 22),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 21),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 20),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 19),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 18),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 17),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 16),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 15),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 14),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 13),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 12),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 11),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 10),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 9),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 8),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 7),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 6),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 5),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 4),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 3),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 2),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 1),
+                  cpp_box::arm::test_bit(status.sys->CSPR, 0));
 
       if (ImGui::CollapsingHeader("Memory")) {
-        const auto sp                   = status.sys.SP();
+        const auto sp                   = status.sys->SP();
         const std::uint32_t stack_start = sp > STACK_START - 5 * 4 ? STACK_START : sp;
-        const auto pc                   = status.sys.PC() - 4;
+        const auto pc                   = status.sys->PC() - 4;
         const std::uint32_t pc_start    = pc < 5 * 4 ? 0 : pc - 5 * 4;
 
         ImGui::Text("Stack Pointer (SP)     Next Instruction (PC-4)");
@@ -495,13 +509,13 @@ struct Box
         for (std::uint32_t idx = 0; idx < 44; idx += 4) {
           const auto sp_loc = stack_start - idx;
           if (sp_loc == sp) {
-            ImGui::Text("%08x: %08x    ", sp_loc, status.sys.read_word(sp_loc));
+            ImGui::Text("%08x: %08x    ", sp_loc, status.sys->read_word(sp_loc));
           } else {
-            ImGui::TextDisabled("%08x: %08x    ", sp_loc, status.sys.read_word(sp_loc));
+            ImGui::TextDisabled("%08x: %08x    ", sp_loc, status.sys->read_word(sp_loc));
           }
           ImGui::SameLine();
           const auto pc_loc = pc_start + idx;
-          const auto word   = status.sys.read_word(pc_loc);
+          const auto word   = status.sys->read_word(pc_loc);
           if (pc_loc == pc) {
             ImGui::Text("%08x: %08x %s", pc_loc, word, status.loaded_files.disassembly[word].c_str());
           } else {
@@ -544,8 +558,8 @@ struct Box
 
     ImGui::Begin("Goals", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
     {
-      int current_goal = status.current_goal;
-      ImGui::SliderInt("Current Goal", &current_goal, 0, status.goals.size() - 1);
+      auto current_goal = static_cast<int>(status.current_goal);
+      ImGui::SliderInt("Current Goal", &current_goal, 0, static_cast<int>(status.goals.size() - 1));
       status.current_goal = current_goal;
       auto &goal          = status.goals.at(status.current_goal);
       ImGui::Separator();
@@ -580,7 +594,7 @@ struct Box
                { "a simple `main` in C++ has this signature: `int main();`",
                  "0 is returned by default",
                  "Your program should look something like: `int main() {}`" },
-               [](const Status &s) -> bool { return s.sys.registers[0] == 0; },
+               [](const Status &s) -> bool { return s.sys->registers[0] == 0; },
                0,
                false },
              { "Return 5 From Main",
@@ -588,7 +602,7 @@ struct Box
                { "To make a function return a value, you use the `return` keyword",
                  "0 is returned by default",
                  "Your program should look something like: `int main() { return 5; }`" },
-               [](const Status &s) -> bool { return s.sys.registers[0] == 5; },
+               [](const Status &s) -> bool { return s.sys->registers[0] == 5; },
                0,
                false } };
   }
@@ -596,14 +610,14 @@ struct Box
 
   void event_loop(const std::filesystem::path &original_path)
   {
-    std::uniform_int_distribution<std::uint8_t> distribution(0, 255);
+    std::uniform_int_distribution<std::uint16_t> distribution(0, 255);
     std::default_random_engine generator;
 
 
     console->set_level(spdlog::level::trace);
     console->set_pattern("[%Y-%m-%d %H:%M:%S %z] [%n] [%^%l%$] [thread %t] %v");
     console->info("C++ Box Starting");
-    console->info("Original Path: {}", original_path.c_str());
+    console->info("Original Path: {}", original_path.string());
 
 
     ImGui::CreateContext();
@@ -631,15 +645,19 @@ struct Box
 
       switch (status.next_state(draw_interface(status))) {
       case Status::States::Running:
-        for (int i = 0; i < status.opsPerFrame && status.sys.operations_remaining(); ++i) { status.sys.next_operation(); }
+        for (int i = 0; i < status.opsPerFrame && status.sys->operations_remaining(); ++i) { status.sys->next_operation(); }
         status.update_display();
         break;
       case Status::States::Begin_Build:
         status.future_build = std::async(std::launch::async, [console = this->console, src = status.loaded_files.src]() {
-          // string is oversized to allow for a buffer for IMGUI, need to only compile the first part of it
+        // string is oversized to allow for a buffer for IMGUI, need to only compile the first part of it
+#if defined(_MSC_VER)
+          return compile(src.substr(0, src.find('\0')), R"(C:\Program Files\LLVM\bin\clang++)", "3", "c++2a", *console);
+#else
           return compile(src.substr(0, src.find('\0')), "/usr/local/bin/clang++", "3", "c++2a", *console);
+#endif
         });
-        status.needs_build  = false;
+        status.needs_build = false;
         break;
       case Status::States::Parse_Build_Results:
         if (!status.needs_build) {
@@ -658,21 +676,21 @@ struct Box
       case Status::States::Start: break;
       case Status::States::Reset_Timer: status.reset_static_timer(); break;
       case Status::States::Step_One:
-        if (status.sys.operations_remaining()) {
-          status.sys.next_operation();
+        if (status.sys->operations_remaining()) {
+          status.sys->next_operation();
           status.update_display();
         }
         break;
       case Status::States::Static: {
         const auto texture_size = status.texture.getSize();
         std::vector<std::uint8_t> data(texture_size.x * texture_size.y * 4);
-        std::generate(data.begin(), data.end(), [&distribution, &generator]() { return distribution(generator); });
+        std::generate(data.begin(), data.end(), [&distribution, &generator]() { return static_cast<std::uint8_t>(distribution(generator)); });
         status.texture.update(data.data());
       } break;
       case Status::States::Check_Goal:
         if (status.current_goal <= status.goals.size() && status.goals[status.current_goal].completion_state(status)) {
           status.goals[status.current_goal].completed = true;
-          status.current_goal = std::min(status.current_goal + 1, status.goals.size() - 1);
+          status.current_goal                         = std::min(status.current_goal + 1, status.goals.size() - 1);
         }
         break;
       }

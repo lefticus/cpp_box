@@ -242,12 +242,19 @@ enum class Instruction_Type {
   Load_And_Store_Multiple
 };
 
+struct Lookup_Table
+{
+  std::uint32_t mask;
+  std::uint32_t expected;
+  Instruction_Type type;
+};
 
 [[nodiscard]] constexpr auto get_lookup_table() noexcept
 {
   // hack for lack of constexpr std::bitset
-  constexpr const auto bitcount = [](const auto &tuple) {
-    auto value = std::get<0>(tuple);
+  // TODO use shared version
+  constexpr const auto bitcount = [](const auto &table) {
+    auto value = table.mask;
     int count  = 0;
     while (value) {  // until all bits are zero
       count++;
@@ -256,22 +263,14 @@ enum class Instruction_Type {
     return count;
   };
 
-  // hack for lack of constexpr swap
-  constexpr const auto swap_tuples = [](auto &lhs, auto &rhs) noexcept
-  {
-    auto old = lhs;
-
-    std::get<0>(lhs) = std::get<0>(rhs);
-    std::get<1>(lhs) = std::get<1>(rhs);
-    std::get<2>(lhs) = std::get<2>(rhs);
-
-    std::get<0>(rhs) = std::get<0>(old);
-    std::get<1>(rhs) = std::get<1>(old);
-    std::get<2>(rhs) = std::get<2>(old);
+  constexpr const auto swap = [](auto &lhs, auto &rhs) {
+    const auto orig_lhs = lhs;
+    lhs                 = rhs;
+    rhs                 = orig_lhs;
   };
 
   // ARMv3  http://netwinder.osuosl.org/pub/netwinder/docs/arm/ARM7500FEvB_3.pdf
-  std::array<std::tuple<std::uint32_t, std::uint32_t, Instruction_Type>, 16> table{
+  std::array<Lookup_Table, 16> table{
     { { 0b0000'1100'0000'0000'0000'0000'0000'0000, 0b0000'0000'0000'0000'0000'0000'0000'0000, Instruction_Type::Data_Processing },
       { 0b0000'1111'1011'1111'0000'1111'1111'1111, 0b0000'0001'0000'1111'0000'1111'1111'1111, Instruction_Type::MRS },
       { 0b0000'1111'1011'1111'1111'1111'1111'0000, 0b0000'0001'0010'1001'1111'0000'0000'0000, Instruction_Type::MSR },
@@ -293,7 +292,7 @@ enum class Instruction_Type {
   // Order from most restrictive to least restrictive
   // Hack for lack of constexpr sort
   for (auto itr = begin(table); itr != end(table); ++itr) {
-    swap_tuples(*itr, *std::min_element(itr, end(table), [bitcount](const auto &lhs, const auto &rhs) { return bitcount(lhs) > bitcount(rhs); }));
+    swap(*itr, *std::min_element(itr, end(table), [bitcount](const auto &lhs, const auto &rhs) { return bitcount(lhs) > bitcount(rhs); }));
   }
 
   return table;
@@ -332,20 +331,12 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
     std::uint32_t end{ 0 };
   };
 
-  static constexpr RAM_Type init_ram(const std::array<std::uint8_t, RAM_Size> &)
-  {
-    return RAM_Type{};
-  }
+  static constexpr RAM_Type init_ram(const std::array<std::uint8_t, RAM_Size> &) { return RAM_Type{}; }
 
-  template<typename T>
-  static constexpr RAM_Type init_ram(const T &)
-  {
-    return RAM_Type(RAM_Size, 0);
-  }
+  template<typename T> static constexpr RAM_Type init_ram(const T &) { return RAM_Type(RAM_Size, 0); }
 
 
-
-  RAM_Type builtin_ram{init_ram(builtin_ram)}; // just passing ourselves in to resolve the type
+  RAM_Type builtin_ram{ init_ram(builtin_ram) };  // just passing ourselves in to resolve the type
 
   constexpr void unhandled_instruction([[maybe_unused]] const Instruction ins, [[maybe_unused]] const Instruction_Type type) { abort(); }
 
@@ -440,8 +431,8 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
     }
   }
 
-
-  constexpr System() = default;
+  constexpr System &operator=(const System &) = default;
+  constexpr System() noexcept                 = default;
 
   template<typename Container> constexpr System(const Container &memory) noexcept
   {
@@ -491,9 +482,12 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
     {
       Instruction instruction{ 0 };
       Instruction_Type type{};
+      constexpr Cache_Elem() noexcept                   = default;
+      constexpr Cache_Elem(const Cache_Elem &) noexcept = default;
+      constexpr Cache_Elem(Cache_Elem &&) noexcept      = default;
     };
 
-    constexpr I_Cache(const System &sys, const std::uint32_t t_start) noexcept : start(t_start) { fill_cache(sys); }
+    constexpr I_Cache(const System &sys, const std::uint32_t t_start) noexcept : cache{}, start(t_start) { fill_cache(sys); }
 
     constexpr Cache_Elem fetch(const std::uint32_t loc, const System &sys) noexcept
     {
@@ -680,10 +674,13 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
 
   constexpr void process(const Data_Processing val) noexcept
   {
-    const auto first_operand               = registers[val.operand_1_register()];
-    const auto [carry_out, second_operand] = get_second_operand(val);
-    const auto destination_register        = val.destination_register();
-    auto &destination                      = registers[destination_register];
+    const auto first_operand = registers[val.operand_1_register()];
+    // note: working around VS issue with structured bindings in constexpr context
+    const auto op                   = get_second_operand(val);
+    const auto carry_out            = op.first;
+    const auto second_operand       = op.second;
+    const auto destination_register = val.destination_register();
+    auto &destination               = registers[destination_register];
 
     const auto update_logical_flags = [=, &destination, carry_out = carry_out](const bool write, const auto result) {
       if (val.set_condition_code() && destination_register != 15) {
@@ -836,7 +833,7 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
   [[nodiscard]] static constexpr auto decode(const Instruction instruction) noexcept
   {
     for (const auto &elem : lookup_table) {
-      if ((std::get<0>(elem) & instruction) == std::get<1>(elem)) { return std::get<2>(elem); }
+      if ((elem.mask & instruction) == elem.expected) { return elem.type; }
     }
 
     return Instruction_Type::Undefined;
@@ -875,6 +872,6 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
 };
 
 
-}  // namespace cpp_box::arma
+}  // namespace cpp_box::arm
 
 #endif

@@ -65,7 +65,8 @@ TEST_CASE("test carry flag")
   REQUIRE(TEST(systest.z_flag()));
 }
 
-
+// This is to avoid an ICE in MSVC when compiling all the constexpr tests
+#if defined(RELAXED_CONSTEXPR) || !defined(_MSC_VER)
 TEST_CASE("register setups and moves")
 {
   //  0:	e3a02d71 	mov	r2, #7232	; 0x1c40
@@ -89,7 +90,6 @@ TEST_CASE("register setups and moves")
   REQUIRE(TEST(systest.registers[2] == 0x4000 + 100 * 100 * 4));
   REQUIRE(TEST(systest.c_flag() == false));
 }
-
 
 TEST_CASE("CMP with carry")
 {
@@ -146,7 +146,7 @@ TEST_CASE("test multiple adds and sub")
 TEST_CASE("test add over 16bits")
 {
   CONSTEXPR auto systest = run_instruction(cpp_box::arm::Instruction{ 0xe3a010ff },  // mov r1, #255
-                                           cpp_box::arm::Instruction{ 0xe3811cff },   // orr r1, r1 #65280
+                                           cpp_box::arm::Instruction{ 0xe3811cff },  // orr r1, r1 #65280
                                            cpp_box::arm::Instruction{ 0xe2811001 }   // add r1, r1, #1
 
   );
@@ -182,8 +182,8 @@ TEST_CASE("Test sub instruction with shift")
                                             cpp_box::arm::Instruction{ 0xe2811009 },  // add r1, r1, #9
                                             cpp_box::arm::Instruction{ 0xe2822002 },  // add r2, r2, #2
                                             cpp_box::arm::Instruction{ 0xe0403231 }   // sub r3, r0, r1, lsr r2
-                                                                                   // logical right shift r1 by the number in bottom byte of r2
-                                                                                   // subtract result from r0 and put answer in r3
+                                                                                      // logical right shift r1 by the number in bottom byte of r2
+                                                                                      // subtract result from r0 and put answer in r3
   );
 
   REQUIRE(TEST(systest7.registers[3] == static_cast<std::uint32_t>(1 - (9 >> 2))));
@@ -301,7 +301,6 @@ TEST_CASE("Test arbitrary movs")
 }
 
 
-
 TEST_CASE("Test arbitrary code")
 {
 
@@ -317,3 +316,5 @@ TEST_CASE("Test arbitrary code")
     run(0xe9, 0, 0xa0, 0xe3, 0x0c, 0x10, 0xa0, 0xe3, 0x03, 0x0c, 0x80, 0xe3, 0x00, 0x10, 0xc0, 0xe5, 0x00, 0x00, 0xa0, 0xe3, 0x0e, 0xf0, 0xa0, 0xe1);
   REQUIRE(TEST(thing.read_byte(1001) == 12));
 }
+
+#endif
