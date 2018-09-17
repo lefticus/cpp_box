@@ -1,6 +1,7 @@
-container:
-  image: lasote/conangcc8
 task:
+  name: gcc8
+  container:
+    image: lasote/conangcc8
   build_script:
   - sudo apt-get update
   - sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git
@@ -17,6 +18,33 @@ task:
   - cmake ..
   - VERBOSE=1 cmake --build . -- -j2
   test_script:
+  - pwd
+  - cd build
+  - ctest -j2
+
+task:
+  name: clang6.0
+  container:
+    image: lasote/conanclang60
+  build_script:
+  - sudo apt-get update
+  - sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git
+  - pwd
+  - ls /usr/bin/clang*
+  - clang-6 --version
+  - cmake --version
+  - conan --version
+  - export CXX=`which clang++-6`
+  - export CC=`which clang-6`
+  - mkdir build
+  - cd build
+  - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
+  - conan install .. --build missing
+  - cmake ..
+  - VERBOSE=1 cmake --build . -- -j2
+  test_script:
+  - pwd
+  - cd build
   - ctest -j2
 
 
