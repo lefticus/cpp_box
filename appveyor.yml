@@ -13,7 +13,7 @@ build_script:
 
     C:\Users\appveyor\AppData\Roaming\Python\Scripts\conan install .. --build missing
 
-    cmake c:\projects\source -G "Visual Studio 15"
+    cmake c:\projects\source -G "Visual Studio 15 2017 Win64"
     
     cmake --build . --config "Debug"
 
