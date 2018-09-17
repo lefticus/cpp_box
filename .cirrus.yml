@@ -1,0 +1,25 @@
+task:
+  name: gcc8-Release
+  container:
+    image: lasote/conangcc8
+  build_script:
+  - sudo apt-get update
+  - sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git
+  - pwd
+  - gcc-8 --version
+  - cmake --version
+  - conan --version
+  - export CXX=`which g++-8`
+  - export CC=`which gcc-8`
+  - mkdir build
+  - cd build
+  - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
+  - conan install .. --build missing
+  - cmake -D CMAKE_BUILD_TYPE:STRING=Release ..
+  - VERBOSE=1 cmake --build . -- -j2
+  test_script:
+  - pwd
+  - cd build
+  - ctest -j2
+
+

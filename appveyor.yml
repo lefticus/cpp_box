@@ -7,10 +7,16 @@ build_script:
 
     cd build
     
-    cmake c:\projects\source -G "Visual Studio 15"
+    pip install --user conan
+
+    C:\Users\appveyor\AppData\Roaming\Python\Scripts\conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
+
+    C:\Users\appveyor\AppData\Roaming\Python\Scripts\conan install .. --build missing
+
+    cmake c:\projects\source -G "Visual Studio 15 2017 Win64"
     
-    cmake --build . --config "Debug"
+    cmake --build . --config "Release"
 
 test_script:
-- cmd: ctest -C Debug
+- cmd: ctest -C Release
 

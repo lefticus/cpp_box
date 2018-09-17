@@ -6,7 +6,7 @@
 #include <filesystem>
 
 namespace spdlog {
-struct logger;
+class logger;
 }
 
 namespace cpp_box::elf {

@@ -1,7 +1,31 @@
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
+namespace std {
+  using uint8_t = unsigned char;
+  using uint16_t = unsigned short;
+  using uint32_t = unsigned int;
+  using size_t = unsigned long long;
+  using byte = unsigned char;
+  
+  
+void memcpy(void *dest, const void *src, size_t size)
+{
+  auto dest_p = reinterpret_cast<std::byte *>(dest);
+  auto src_p = reinterpret_cast<const std::byte *>(src);
+  
+  while (size) {
+    *dest_p = *src_p;
+    ++dest_p;
+    ++src_p;
+    --size;
+  }
+}
+
+template<typename T>
+const T &max(const T &lhs, const T &rhs) {
+  if (lhs > rhs) { return lhs; }
+  else {return rhs; }
+}
+}
+
 
 template<typename T> auto peek(const std::uint32_t loc)
 {
