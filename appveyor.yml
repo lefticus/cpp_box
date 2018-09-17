@@ -7,6 +7,8 @@ build_script:
 
     cd build
     
+    pip install --user conan
+
     cmake c:\projects\source -G "Visual Studio 15"
     
     cmake --build . --config "Debug"
