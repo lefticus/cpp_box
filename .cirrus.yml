@@ -31,11 +31,11 @@ task:
   - sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git
   - pwd
   - ls /usr/bin/clang*
-  - clang-6 --version
+  - clang-6.0 --version
   - cmake --version
   - conan --version
-  - export CXX=`which clang++-6`
-  - export CC=`which clang-6`
+  - export CXX=`which clang++-6.0`
+  - export CC=`which clang-6.0`
   - mkdir build
   - cd build
   - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
