@@ -23,7 +23,7 @@ task:
   - ctest -j2
 
 task:
-  name: gcc8-Debug-Coverage
+  name: gcc8-Debug
   container:
     image: lasote/conangcc8
   build_script:
@@ -39,17 +39,17 @@ task:
   - cd build
   - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
   - conan install .. --build missing
-  - cmake -D CMAKE_BUILD_TYPE:STRING=Debug -D ENABLE_COVERAGE:BOOL=ON ..
+  - cmake -D CMAKE_BUILD_TYPE:STRING=Debug ..
   - VERBOSE=1 cmake --build . -- -j2
   test_script:
   - pwd
   - cd build
   - ctest -j2
-  coverage_script:
-  - pwd
-  - cd build
-  - ls `which gcov-8`
-  - bash <(curl -s https://codecov.io/bash) -x `which gcov-8` 2>/dev/null
+    #  coverage_script:
+    #  - pwd
+    #  - cd build
+    #  - ls `which gcov-8`
+    #  - bash <(curl -s https://codecov.io/bash) -x `which gcov-8` 2>/dev/null
 
 
 # Disabling clang6.0 due to missing libc++ now I guess

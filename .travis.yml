@@ -18,7 +18,7 @@ matrix:
     - name: "gcc 8 Release"
       os: linux
       sudo: false
-      env: COVERAGE=1 CXX_EXE=/usr/bin/g++-8 CC_EXE=/usr/bin/gcc-8 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-DCMAKE_BUILD_TYPE:STRING=Debug -DENABLE_COVERAGE:BOOL=ON"
+      env: CXX_EXE=/usr/bin/g++-8 CC_EXE=/usr/bin/gcc-8 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-DCMAKE_BUILD_TYPE:STRING=Release"
       addons:
         apt:
           sources:
