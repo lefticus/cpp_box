@@ -9,6 +9,10 @@ build_script:
     
     pip install --user conan
 
+    conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
+
+    conan install .. --build missing
+
     cmake c:\projects\source -G "Visual Studio 15"
     
     cmake --build . --config "Debug"
