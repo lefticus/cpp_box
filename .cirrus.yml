@@ -11,10 +11,11 @@ task:
   - export CXX=`which g++-8`
   - export CC=`which gcc-8`
   - mkdir build
-  - cd build; conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
-  - cd build; conan install .. --build missing
-  - cd build; cmake ..
-  - cd build; VERBOSE=1 cmake --build . -- -j2
-  - cd build; ctest -j2
+  - cd build
+  - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
+  - conan install .. --build missing
+  - cmake ..
+  - VERBOSE=1 cmake --build . -- -j2
+  - ctest -j2
 
 
