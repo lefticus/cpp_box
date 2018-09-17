@@ -1,5 +1,5 @@
 container:
-  - image: lasote/conangcc8
+  image: lasote/conangcc8
 task:
   build_script:
   - sudo apt-get update
