@@ -15,36 +15,6 @@ matrix:
             - libxrandr-dev
             - libudev-dev
             - g++-7
-    - name: "gcc 8 Release"
-      os: linux
-      sudo: false
-      env: CXX_EXE=/usr/bin/g++-8 CC_EXE=/usr/bin/gcc-8 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-DCMAKE_BUILD_TYPE:STRING=Release"
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - libx11-dev
-            - libxrandr-dev
-            - libudev-dev
-            - g++-8
-#    - name: "clang 7 / libc++ Debug"
-#      os: linux
-#      sudo: false
-#      env: CXX_EXE=/usr/bin/clang++-7 CC_EXE=/usr/bin/clang-7 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-DLIBCPP:BOOL=ON"
-#      addons:
-#        apt:
-#          sources:
-#            - ubuntu-toolchain-r-test
-#            - llvm-toolchain-trusty-7
-#          packages:
-#            - libx11-dev
-#            - libxrandr-dev
-#            - libudev-dev
-#            - clang-7
-#            - libc++-7
-
-
 
 install:
   pip install --user conan
