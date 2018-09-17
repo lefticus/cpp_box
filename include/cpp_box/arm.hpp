@@ -432,7 +432,7 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
   }
 
   constexpr System &operator=(const System &) = default;
-  constexpr System() noexcept                 = default;
+  constexpr System()                          = default;
 
   template<typename Container> constexpr System(const Container &memory) noexcept
   {
@@ -487,7 +487,7 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
       constexpr Cache_Elem(Cache_Elem &&) noexcept      = default;
     };
 
-    constexpr I_Cache(const System &sys, const std::uint32_t t_start) noexcept : cache{}, start(t_start) { fill_cache(sys); }
+    constexpr I_Cache(const System &sys, const std::uint32_t t_start) noexcept : start(t_start), cache{} { fill_cache(sys); }
 
     constexpr Cache_Elem fetch(const std::uint32_t loc, const System &sys) noexcept
     {
@@ -676,9 +676,9 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
   {
     const auto first_operand = registers[val.operand_1_register()];
     // note: working around VS issue with structured bindings in constexpr context
-    const auto op                   = get_second_operand(val);
-    const auto carry_out            = op.first;
-    const auto second_operand       = op.second;
+    const auto op2                  = get_second_operand(val);
+    const auto carry_out            = op2.first;
+    const auto second_operand       = op2.second;
     const auto destination_register = val.destination_register();
     auto &destination               = registers[destination_register];
 
