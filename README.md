@@ -19,6 +19,12 @@ For more information on the ARMv4 architecture, look for documentation on the AR
     * http://infocenter.arm.com/help/topic/com.arm.doc.ddi0210c/index.html
     * http://infocenter.arm.com/help/topic/com.arm.doc.ddi0210c/DDI0210B.pdf See 1-12 for instruction format
 
+We plan to implement the VFP version 1 for a hardware FPU. For this support add `-mfpu=vfp -mfloat-abi=hard` to your build command line.
+
+For more information, look at the ARMv5 Architecture Reference Manual. 
+ * http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0100i/index.html
+ * http://infocenter.arm.com/help/topic/com.arm.doc.qrc0007e/QRC0007_VFP.pdf
+ * https://www.scss.tcd.ie/~waldroj/3d1/arm_arm.pdf
 
 
 ## Getting Started
