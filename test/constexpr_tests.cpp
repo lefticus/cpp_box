@@ -317,4 +317,16 @@ TEST_CASE("Test arbitrary code")
   REQUIRE(TEST(thing.read_byte(1001) == 12));
 }
 
+TEST_CASE("Test register offset")
+{
+  CONSTEXPR auto systest = run_instruction(cpp_box::arm::Instruction{ 0xe59f000c },  // ldr  r0, [pc, #12]
+                                           cpp_box::arm::Instruction{ 0xe59f100c },  // ldr  r1, [pc, #12]
+                                           cpp_box::arm::Instruction{ 0xe5902000 },  // ldr  r2, [r0]
+                                           cpp_box::arm::Instruction{ 0xe5812000 },  // str  r2, [r1] bx   lr
+                                           cpp_box::arm::Instruction{ 0xe12fff1e }   // bx   lr
+  );
+
+// TODO  REQUIRE(TEST());
+}
+
 #endif
