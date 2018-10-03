@@ -353,4 +353,11 @@ TEST_CASE("Test memory instructions - Register")
   // TODO  REQUIRE(TEST());
 }
 
+TEST_CASE("Test memory instructions - Scaled register")
+{
+  CONSTEXPR auto systest = run_instruction(cpp_box::arm::Instruction{ 0xe7913102 }  // ldr   r3, [r1, r2, LSL#2]  address mode: offset
+                                           );
+
+  // TODO  REQUIRE(TEST());
+}
 #endif
