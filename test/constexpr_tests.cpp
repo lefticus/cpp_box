@@ -319,7 +319,8 @@ TEST_CASE("Test arbitrary code")
 
 /*
  * Only load/store (LDR and STR) instructions can access memory
- * Offset form: Immediate value
+ * Offset form:
+ *    Immediate value
  * 		Register
  * 		Scaled register
  */
@@ -335,6 +336,18 @@ TEST_CASE("Test memory instructions - Immediate value")
                                            // TODO instruction not supported
                                            cpp_box::arm::Instruction{ 0xe5812000 },  // str  r2, [r1]
                                            cpp_box::arm::Instruction{ 0xe12fff1e }   // bx lr
+  );
+
+  // TODO  REQUIRE(TEST());
+}
+
+TEST_CASE("Test memory instructions - Register")
+{
+  CONSTEXPR auto systest = run_instruction(cpp_box::arm::Instruction{ 0xe7812002 }  // str r2, [r1, r2]  address mode: offset
+                                           // cpp_box::arm::Instruction{ 0x },  // str r2, [ r1, r2 ]! address mode: pre-indexed.
+                                           // TODO instruction not supported
+                                           // cpp_box::arm::Instruction{ 0xe },  // ldr r3, [r1], r2  address mode: post-indexed.
+                                           // TODO instruction not supported
   );
 
   // TODO  REQUIRE(TEST());
