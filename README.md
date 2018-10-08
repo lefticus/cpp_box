@@ -1,8 +1,10 @@
-[![Build Status](https://travis-ci.org/lefticus/cpp_box.svg?branch=master)](https://travis-ci.org/lefticus/cpp_box)
-[![codecov](https://codecov.io/gh/lefticus/cpp_box/branch/master/graph/badge.svg)](https://codecov.io/gh/lefticus/cpp_box)
-[![CircleCI master](https://img.shields.io/circleci/project/github/lefticus/cpp_box/master.svg)](https://circleci.com/gh/lefticus/cpp_box)
-[![CodeFactor](https://www.codefactor.io/repository/github/lefticus/cpp_box/badge)](https://www.codefactor.io/repository/github/lefticus/cpp_box)
-
+|      |  |
+|------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
+| travis     | [![Travis Build Status](https://travis-ci.org/lefticus/cpp_box.svg?branch=master)](https://travis-ci.org/lefticus/cpp_box)                               |
+| Cirrus CI  | [![Cirrus CI Build Status](https://api.cirrus-ci.com/github/lefticus/cpp_box.svg)](https://cirrus-ci.com/github/lefticus/cpp_box)                        |
+| Appveyor   | ![AppVeyor Build status](https://img.shields.io/appveyor/ci/lefticus/cpp-box.svg)                                                                              |
+| Codecov    | [![codecov](https://codecov.io/gh/lefticus/cpp_box/branch/master/graph/badge.svg)](https://codecov.io/gh/lefticus/cpp_box)                        |
+| CodeFactor | [![CodeFactor](https://www.codefactor.io/repository/github/lefticus/cpp_box/badge)](https://www.codefactor.io/repository/github/lefticus/cpp_box) |
 # cpp_box
 
 It implements a partial ARMv4 architecture in software.
