@@ -37,6 +37,8 @@ struct Box
 
   constexpr static std::uint32_t TOTAL_RAM = 1024 * 1024 * 10;  // 10 MB
   enum struct Memory_Map : std::uint32_t {
+    // TODO: Add interrupt vectors here
+    //
     REGISTER_START = 0x00000000,
     TOTAL_RAM      = REGISTER_START + 0x0000,
     SCREEN_WIDTH   = REGISTER_START + 0x0004,  // 16bit screen width
@@ -79,6 +81,15 @@ struct Box
     std::clog << '\n' << rang::style::reset << rang::fg::reset;
   }
 
+  struct Memory_Location
+  {
+    std::string disassembly;
+    std::filesystem::path filename;
+    int line_number;
+    std::string section;
+    std::string function_name;
+  };
+
 
   struct Loaded_Files
   {
@@ -90,7 +101,8 @@ struct Box
     std::basic_string_view<std::uint8_t> image;
     std::uint64_t entry_point{};
     bool good_binary{ false };
-    std::unordered_map<std::uint32_t, std::string> disassembly;
+    std::unordered_map<std::uint32_t, Memory_Location> location_data;
+    std::map<std::string, std::uint64_t> section_offsets;
   };
 
 
@@ -105,6 +117,16 @@ struct Box
       if (file_header.is_elf_file()) {
         const auto sh_string_table = file_header.sh_string_table();
 
+        // TODO: make this local map better
+        std::map<std::string, std::uint64_t> section_offsets;
+
+        for (const auto &header : file_header.section_headers()) {
+          const auto header_name       = std::string{ header.name(sh_string_table) };
+          const auto offset            = header.offset();
+          section_offsets[header_name] = offset;
+          logger.trace("Section: '{}', offset: {}", header_name, offset);
+        }
+
         const auto string_table = file_header.string_table();
         for (const auto &header : file_header.section_headers()) {
           for (const auto &symbol_table_entry : header.symbol_table_entries()) {
@@ -115,7 +137,7 @@ struct Box
               const auto main_file_offset = static_cast<std::uint32_t>(main_section.offset() + symbol_table_entry.value());
               logger.info(
                 "'main' symbol found in '{}':{} file offset: {}", main_section.name(sh_string_table), symbol_table_entry.value(), main_file_offset);
-              return Loaded_Files{ "", "", std::move(data), data_view, main_file_offset, true, {} };
+              return Loaded_Files{ "", "", std::move(data), data_view, main_file_offset, true, {}, section_offsets };
             }
           }
         }
@@ -125,7 +147,7 @@ struct Box
     // if we make it here it's not an elf file or doesn't have main, assuming a src file
     logger.info("Didn't find a main, assuming C++ src file");
 
-    return { std::string{ data->begin(), data->end() }, "", {}, {}, {}, false, {} };
+    return { std::string{ data->begin(), data->end() }, "", {}, {}, {}, false, {}, {} };
   }
 
 
@@ -159,12 +181,13 @@ struct Box
 #endif
     };
 
-    const auto build_command = quote_command(fmt::format(R"("{}" -std={} "{}" -c -o "{}" -O{} -save-temps=obj --target=armv4-linux -stdlib=libc++)",
-                                                         t_compiler.string(),
-                                                         std::string(t_standard),
-                                                         cpp_file.string(),
-                                                         obj_file.string(),
-                                                         std::string(t_optimization_level)));
+    const auto build_command = quote_command(fmt::format(
+      R"("{}" -std={} "{}" -c -o "{}" -O{} -g -save-temps=obj --target=arm-none-elf -march=armv4 -mfpu=vfp -mfloat-abi=hard -nostdinc -D__ELF__ -D_LIBCPP_HAS_NO_THREADS)",
+      t_compiler.string(),
+      std::string(t_standard),
+      cpp_file.string(),
+      obj_file.string(),
+      std::string(t_optimization_level)));
 
     logger.debug("Executing compile command: '{}'", build_command);
     std::system(build_command.c_str());
@@ -172,8 +195,10 @@ struct Box
     auto loaded         = load_unknown(obj_file, logger);
 
 
-    const auto disassemble_command = quote_command(fmt::format(
-      R"("{}" -disassemble "{}" > "{}")", (t_compiler.parent_path() / "llvm-objdump").string(), obj_file.string(), disassembly_file.string()));
+    const auto disassemble_command = quote_command(fmt::format(R"("{}" -disassemble -demangle -line-numbers -full-leading-addr -source "{}" > "{}")",
+                                                               (t_compiler.parent_path() / "llvm-objdump").string(),
+                                                               obj_file.string(),
+                                                               disassembly_file.string()));
     logger.debug("Executing disassemble command: '{}'", disassemble_command);
     std::system(disassemble_command.c_str());
 
@@ -181,25 +206,62 @@ struct Box
     const std::regex strip_attributes{ "\\n\\s+\\..*", std::regex::ECMAScript };
     dump_rom(loaded.image);
 
-    const auto parse_disassembly = [&logger](const std::string &file) {
-      const std::regex read_disassembly{ ".*\\t(..) (..) (..) (..) \\t(.*)" };
+    const auto parse_disassembly = [&logger](const std::string &file, const auto &section_offsets) {
+      const std::regex read_disassembly{ R"(\s+([0-9a-f]+):\s+(..) (..) (..) (..) \t(.*))" };
+      const std::regex read_section_name{ R"(^Disassembly of section (.*):$)" };
+      const std::regex read_function_name{ R"(^(.*:)$)" };
+      const std::regex read_line_number{ R"(^; (.*):([0-9]+)$)" };
+      const std::regex read_source_code{ R"(^; (.*)$)" };
+
       std::stringstream ss{ file };
-      std::unordered_map<std::uint32_t, std::string> disassembly;
+
+      std::unordered_map<std::uint32_t, Memory_Location> memory_locations;
+
+      std::string current_function_name{};
+      std::string current_section{};
+      std::uint32_t current_offset{};
+      std::string current_file_name{};
+      int current_line_number{};
+      std::string current_source_text{};
+
       for (std::string line; std::getline(ss, line);) {
-        if (std::smatch results; std::regex_match(line, results, read_disassembly)) {
-          //          logger.trace(
-          //            "Parsed disassembly line: '{}' '{}' '{}' '{}' '{}'", results.str(1), results.str(2), results.str(3), results.str(4),
-          //            results.str(5));
-          const auto b1    = static_cast<std::uint32_t>(std::stoi(results.str(1), nullptr, 16));
-          const auto b2    = static_cast<std::uint32_t>(std::stoi(results.str(2), nullptr, 16));
-          const auto b3    = static_cast<std::uint32_t>(std::stoi(results.str(3), nullptr, 16));
-          const auto b4    = static_cast<std::uint32_t>(std::stoi(results.str(4), nullptr, 16));
+        std::smatch results;
+        if (std::regex_match(line, results, read_disassembly)) {
+          logger.trace("Parsed disassembly line: (offset: '{}') '{}' '{}' '{}' '{}' '{}'",
+                       results.str(1),
+                       results.str(2),
+                       results.str(3),
+                       results.str(4),
+                       results.str(5),
+                       results.str(6));
+          const auto b1    = static_cast<std::uint32_t>(std::stoi(results.str(2), nullptr, 16));
+          const auto b2    = static_cast<std::uint32_t>(std::stoi(results.str(3), nullptr, 16));
+          const auto b3    = static_cast<std::uint32_t>(std::stoi(results.str(4), nullptr, 16));
+          const auto b4    = static_cast<std::uint32_t>(std::stoi(results.str(5), nullptr, 16));
           const auto value = (b4 << 24) | (b3 << 16) | (b2 << 8) | b1;
-          logger.trace("Disassembly: '{:08x}', '{}'", value, results.str(5));
-          disassembly[value] = results.str(5);
+
+          current_offset = static_cast<std::uint32_t>(std::stoi(results.str(1), nullptr, 16));
+
+          logger.trace("Disassembly: '{:08x}', '{}'", value, results.str(6));
+          memory_locations[static_cast<std::int32_t>(current_offset + section_offsets.at(current_section))] =
+            Memory_Location{ results.str(6), current_file_name, current_line_number, current_section, current_function_name };
+
+        } else if (std::regex_match(line, results, read_section_name)) {
+          logger.trace("Entering binary section: '{}'", results.str(1));
+          current_section = results.str(1);
+        } else if (std::regex_match(line, results, read_line_number)) {
+          logger.trace("Entering line: '{}':'{}'", results.str(1), results.str(2));
+          current_file_name   = results.str(1);
+          current_line_number = std::stoi(results.str(2));
+        } else if (std::regex_match(line, results, read_source_code)) {
+          logger.trace("Source line: '{}'", results.str(1));
+          current_source_text = results.str(1);
+        } else if (std::regex_match(line, results, read_function_name)) {
+          logger.trace("Entering function: '{}'", results.str(1));
+          current_function_name = results.str(1);
         }
       }
-      return disassembly;
+      return memory_locations;
     };
 
     const auto disassembly = cpp_box::utility::read_file(disassembly_file);
@@ -210,7 +272,8 @@ struct Box
                          loaded.image,
                          static_cast<std::uint32_t>(loaded.entry_point),
                          loaded.good_binary,
-                         parse_disassembly(std::string(disassembly.begin(), disassembly.end())) };
+                         parse_disassembly(std::string(disassembly.begin(), disassembly.end()), loaded.section_offsets),
+                         loaded.section_offsets };
   }
 
   struct Inputs
@@ -234,6 +297,8 @@ struct Box
     bool paused{ false };
     bool show_assembly{ false };
     sf::Clock framerateClock;
+    std::array<std::uint32_t, 16> last_registers{};
+    std::uint32_t last_CSPR{};
 
     /// TODO: move somewhere shared
     struct Timer
@@ -309,8 +374,8 @@ struct Box
     void reset()
     {
       m_logger.trace("reset()");
-      sys = std::make_unique<decltype(sys)::element_type>(loaded_files.image);
-      sys->setup_run(static_cast<std::uint32_t>(loaded_files.entry_point));
+      sys = std::make_unique<decltype(sys)::element_type>(loaded_files.image, static_cast<std::uint32_t>(Memory_Map::USER_RAM_START));
+      sys->setup_run(static_cast<std::uint32_t>(loaded_files.entry_point) + static_cast<std::uint32_t>(Memory_Map::USER_RAM_START));
       assert(sys->SP() == STACK_START);
       m_logger.trace("setting up registers");
       sys->write_word(static_cast<std::uint32_t>(Memory_Map::TOTAL_RAM), TOTAL_RAM);
@@ -335,7 +400,7 @@ struct Box
     Status(spdlog::logger &logger, const std::filesystem::path &path, std::vector<Goal> t_goals)
       : m_logger{ logger }
       , loaded_files{ load_unknown(path, m_logger) }
-      , sys{ std::make_unique<decltype(sys)::element_type>(loaded_files.image) }
+      , sys{ std::make_unique<decltype(sys)::element_type>(loaded_files.image, static_cast<std::uint32_t>(Memory_Map::USER_RAM_START)) }
       , goals{ std::move(t_goals) }
     {
       m_logger.trace("Creating Status Object");
@@ -444,59 +509,39 @@ struct Box
 
     ImGui::Begin("State", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
     {
-      ImGui::Text("R0 %08x R1 %08x R2  %08x R3  %08x R4  %08x R5 %08x R6 %08x R7 %08x",
-                  status.sys->registers[0],
-                  status.sys->registers[1],
-                  status.sys->registers[2],
-                  status.sys->registers[3],
-                  status.sys->registers[4],
-                  status.sys->registers[5],
-                  status.sys->registers[6],
-                  status.sys->registers[7]);
+      if (ImGui::CollapsingHeader("Registers")) {
+        for (std::size_t i = 0; i < 16; ++i) {
+          switch (i) {
+          case 13: ImGui::Text("SP "); break;
+          case 14: ImGui::Text("LR "); break;
+          case 15: ImGui::Text("PC "); break;
+          default: ImGui::Text("R%-2i", static_cast<int>(i));
+          }
+          ImGui::SameLine();
+          if (status.sys->registers[i] == status.last_registers[i]) {
+            ImGui::TextDisabled("%08x", status.sys->registers[i]);
+          } else {
+            ImGui::Text("%08x", status.sys->registers[i]);
+          }
+          if (i != 7 && i != 15) { ImGui::SameLine(); }
+        }
 
-      ImGui::Text("R8 %08x R9 %08x R10 %08x R11 %08x R12 %08x SP %08x LR %08x PC %08x",
-                  status.sys->registers[8],
-                  status.sys->registers[9],
-                  status.sys->registers[10],
-                  status.sys->registers[11],
-                  status.sys->registers[12],
-                  status.sys->registers[13],
-                  status.sys->registers[14],
-                  status.sys->registers[15]);
-      ImGui::Text("     NZCV                    IFT     ");
-      ImGui::Text("CSPR %i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i",
-                  cpp_box::arm::test_bit(status.sys->CSPR, 31),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 30),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 29),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 28),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 27),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 26),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 25),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 24),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 23),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 22),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 21),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 20),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 19),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 18),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 17),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 16),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 15),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 14),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 13),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 12),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 11),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 10),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 9),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 8),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 7),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 6),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 5),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 4),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 3),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 2),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 1),
-                  cpp_box::arm::test_bit(status.sys->CSPR, 0));
+
+        ImGui::Text("     NZCV                    IFT     ");
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 2, 0 });
+        ImGui::Text("CSPR ");
+        for (std::size_t bit = 0; bit < 32; ++bit) {
+          ImGui::SameLine();
+          const auto new_bit = cpp_box::arm::test_bit(status.sys->CSPR, 31 - bit);
+          const auto old_bit = cpp_box::arm::test_bit(status.last_CSPR, 31 - bit);
+          if (new_bit == old_bit) {
+            ImGui::TextDisabled("%i", cpp_box::arm::test_bit(status.sys->CSPR, 31 - bit));
+          } else {
+            ImGui::Text("%i", cpp_box::arm::test_bit(status.sys->CSPR, 31 - bit));
+          }
+        }
+        ImGui::PopStyleVar();
+      }
 
       if (ImGui::CollapsingHeader("Memory")) {
         const auto sp                   = status.sys->SP();
@@ -517,11 +562,42 @@ struct Box
           const auto pc_loc = pc_start + idx;
           const auto word   = status.sys->read_word(pc_loc);
           if (pc_loc == pc) {
-            ImGui::Text("%08x: %08x %s", pc_loc, word, status.loaded_files.disassembly[word].c_str());
+            ImGui::Text("%08x: %08x %s",
+                        pc_loc,
+                        word,
+                        status.loaded_files.location_data[pc_loc - static_cast<std::uint32_t>(Memory_Map::USER_RAM_START)].disassembly.c_str());
           } else {
-            ImGui::TextDisabled("%08x: %08x %s", pc_loc, word, status.loaded_files.disassembly[word].c_str());
+            ImGui::TextDisabled(
+              "%08x: %08x %s",
+              pc_loc,
+              word,
+              status.loaded_files.location_data[pc_loc - static_cast<std::uint32_t>(Memory_Map::USER_RAM_START)].disassembly.c_str());
           }
         }
+      }
+
+      if (ImGui::CollapsingHeader("Source")) {
+        const auto pc              = status.sys->PC() - 4;
+        const auto object_loc      = pc - static_cast<uint32_t>(Memory_Map::USER_RAM_START);
+        const auto current_linenum = status.loaded_files.location_data[object_loc].line_number;
+        const auto size            = ImGui::GetContentRegionMax();
+        ImGui::BeginChild("Active Source", { ImGui::GetContentRegionAvailWidth(), 300 });
+        std::size_t endl  = 0;
+        std::size_t begin = 0;
+        int linenum       = 1;
+        while (endl != std::string::npos) {
+          begin           = std::exchange(endl, status.loaded_files.src.find('\n', endl));
+          const auto line = status.loaded_files.src.substr(begin, endl - begin);
+          if (linenum == current_linenum) {
+            ImGui::Text("%4i: %s", linenum, line.c_str());
+            ImGui::SetScrollHere();
+          } else {
+            ImGui::TextDisabled("%4i: %s", linenum, line.c_str());
+          }
+          if (endl != std::string::npos) { ++endl; }
+          ++linenum;
+        }
+        ImGui::EndChild();
       }
     }
     ImGui::End();
@@ -566,10 +642,10 @@ struct Box
       bool completed = goal.completed;
       ImGui::Checkbox("", &completed);
       ImGui::SameLine();
-      ImGui::Text(goal.name.c_str());
-      ImGui::Text(goal.description.c_str());
+      ImGui::Text("%s", goal.name.c_str());
+      ImGui::Text("%s", goal.description.c_str());
       for (std::size_t clue = 0; clue < goal.hints.size(); ++clue) {
-        if (ImGui::CollapsingHeader(fmt::format("Show Hint #{}", clue).c_str())) { ImGui::Text(goal.hints[clue].c_str()); }
+        if (ImGui::CollapsingHeader("%s", fmt::format("Show Hint #{}", clue).c_str())) { ImGui::Text("%s", goal.hints[clue].c_str()); }
       }
     }
     ImGui::End();
@@ -645,6 +721,8 @@ struct Box
 
       switch (status.next_state(draw_interface(status))) {
       case Status::States::Running:
+        status.last_registers = status.sys->registers;
+        status.last_CSPR      = status.sys->CSPR;
         for (int i = 0; i < status.opsPerFrame && status.sys->operations_remaining(); ++i) { status.sys->next_operation(); }
         status.update_display();
         break;
@@ -677,6 +755,8 @@ struct Box
       case Status::States::Reset_Timer: status.reset_static_timer(); break;
       case Status::States::Step_One:
         if (status.sys->operations_remaining()) {
+          status.last_registers = status.sys->registers;
+          status.last_CSPR      = status.sys->CSPR;
           status.sys->next_operation();
           status.update_display();
         }

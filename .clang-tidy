@@ -1,7 +1,7 @@
 ---
-Checks:          'bugprone-*,cert-*,hicpp-*,misc-*,modernize-*,performance-*,readability-*'
+Checks:          '*,-google-runtime-references,-fuchsia*,-readability-else-after-return,-readability-avoid-const-params-in-decls,-hicpp-signed-bitwise'
 WarningsAsErrors: ''
-HeaderFilterRegex: ''
+HeaderFilterRegex: '.*'
 AnalyzeTemporaryDtors: false
 FormatStyle:     none
 ...

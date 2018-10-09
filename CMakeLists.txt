@@ -1,4 +1,20 @@
-cmake_minimum_required(VERSION 3.2)
+cmake_minimum_required(VERSION 3.10)
+project(TheCppBox VERSION 0.0.1 LANGUAGES CXX)
+
+find_program(CCACHE ccache)
+if (CCACHE)
+  set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE})
+endif ()
+
+find_program(CPPCHECK cppcheck)
+if (CPPCHECK)
+  set(CMAKE_CXX_CPPCHECK ${CPPCHECK} --enable=all --inconclusive)
+endif ()
+
+find_program(CLANGTIDY clang-tidy)
+if (CLANGTIDY)
+  set(CMAKE_CXX_CLANG_TIDY ${CLANGTIDY})
+endif()
 
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup(TARGETS)
@@ -119,7 +135,7 @@ if(NOT ONLY_COVERAGE)
   find_package(Threads REQUIRED)
 
   # imgui test executable, with full warnings enabled
-  add_executable(cpp_box src/cpp_box.cpp)
+  add_executable(cpp_box WIN32 src/cpp_box.cpp)
   target_link_libraries(cpp_box
                         PRIVATE project_options
                                 project_warnings
