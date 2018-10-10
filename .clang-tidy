@@ -4,6 +4,5 @@ WarningsAsErrors: ''
 HeaderFilterRegex: '.*'
 AnalyzeTemporaryDtors: false
 FormatStyle:     none
-# LineFilter: '[{"name":"file1.cpp","lines":[[1,3],[5,7]]}, {"name":"imgui.h"}, {"name":"*/imgui.cpp"}, {"name":"*/imgui_draw.cpp"}]'
 ...
 
