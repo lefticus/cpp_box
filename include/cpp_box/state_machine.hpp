@@ -34,7 +34,7 @@ template<typename EnumType, typename... Callables> struct StateMachine
   {
     if constexpr (Index == Count) {
       return current_state;
-    } else {
+    } else if constexpr (Index != Count) {
       if (std::get<Index>(std::forward<Transitions>(transitions)).test(current_state, std::forward<Param>(params)...)) {
         return std::get<Index>(std::forward<Transitions>(transitions)).to;
       } else {

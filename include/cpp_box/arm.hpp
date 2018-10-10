@@ -1,10 +1,10 @@
 #ifndef CPP_BOX_ARM_HPP
 #define CPP_BOX_ARM_HPP
 
-#include <array>
-#include <tuple>
 #include <algorithm>
+#include <array>
 #include <iterator>
+#include <tuple>
 #include <variant>
 
 namespace cpp_box::arm {
@@ -27,7 +27,7 @@ template<std::size_t Idx, typename F, typename V> constexpr decltype(auto) simpl
 }
 
 // Variation of the naive way: only loops as many times as there are set bits.
-// TODO Move into shared utility location
+// TODO(jason): Move into shared utility location
 template<typename T>[[nodiscard]] constexpr T popcnt(T v) noexcept
 {
   T c{ 0 };
@@ -41,7 +41,7 @@ template<typename F, typename V> constexpr decltype(auto) simple_visit(F &&f, V 
   return (simple_visit_impl<0>(std::forward<F>(f), std::forward<V>(t)));
 }
 
-// TODO Move into shared utility location
+// TODO(jason): Move into shared utility location
 template<typename Value, typename Bit>[[nodiscard]] constexpr bool test_bit(const Value val, const Bit bit) noexcept
 {
   return val & (static_cast<Value>(1) << bit);
@@ -252,7 +252,7 @@ struct Lookup_Table
 [[nodiscard]] constexpr auto get_lookup_table() noexcept
 {
   // hack for lack of constexpr std::bitset
-  // TODO use shared version
+  // TODO(jason): use shared version
   constexpr const auto bitcount = [](const auto &table) {
     auto value = table.mask;
     int count  = 0;
@@ -331,9 +331,9 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
     std::uint32_t end{ 0 };
   };
 
-  static constexpr RAM_Type init_ram(const std::array<std::uint8_t, RAM_Size> &) { return RAM_Type{}; }
+  static constexpr RAM_Type init_ram(const std::array<std::uint8_t, RAM_Size> & /*unused*/) { return RAM_Type{}; }
 
-  template<typename T> static constexpr RAM_Type init_ram(const T &) { return RAM_Type(RAM_Size, 0); }
+  template<typename T> static constexpr RAM_Type init_ram(const T & /*unused*/) { return RAM_Type(RAM_Size, 0); }
 
 
   RAM_Type builtin_ram{ init_ram(builtin_ram) };  // just passing ourselves in to resolve the type
@@ -431,20 +431,20 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
     }
   }
 
-  constexpr System &operator=(System &&) = default;
-  ~System()                              = default;
-  constexpr System(const System &)       = default;
-  constexpr System(System &&)            = default;
+  constexpr System &operator=(System &&) noexcept = default;
+  ~System()                                       = default;
+  constexpr System(const System &)                = default;
+  constexpr System(System &&) noexcept            = default;
   constexpr System &operator=(const System &) = default;
   constexpr System()                          = default;
 
-  template<typename Container> constexpr System(const Container &memory, const std::uint32_t start_location = 0) noexcept
+  template<typename Container> constexpr explicit System(const Container &memory, const std::uint32_t start_location = 0) noexcept
   {
     for (std::size_t loc = 0; loc < memory.size(); ++loc) { write_byte(static_cast<std::uint32_t>(loc + start_location), memory[loc]); }
     i_cache.fill_cache(*this);
   }
 
-  template<std::size_t Size> constexpr System(const std::array<std::uint8_t, Size> &memory, const std::uint32_t start_location = 0) noexcept
+  template<std::size_t Size> constexpr explicit System(const std::array<std::uint8_t, Size> &memory, const std::uint32_t start_location = 0) noexcept
   {
     static_assert(Size <= RAM_Size);
 
@@ -465,7 +465,7 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
   }
 
   template<typename Tracer = void (*)(const System &, std::uint32_t, Instruction)>
-  constexpr void next_operation(Tracer &&tracer = [](const System &, const auto, const auto) {}) noexcept
+  constexpr void next_operation(Tracer &&tracer = [](const System & /*unused*/, const auto /*unused*/, const auto /*unused*/) {}) noexcept
   {
     const auto [ins, type] = i_cache.fetch(PC() - 4, *this);
     tracer(*this, PC() - 4, ins);
@@ -480,9 +480,13 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
     {
       Instruction instruction{ 0 };
       Instruction_Type type{};
+      // TODO(jason) check if these are necessary in current MSVC, which is why they were added
       constexpr Cache_Elem() noexcept                   = default;
       constexpr Cache_Elem(const Cache_Elem &) noexcept = default;
       constexpr Cache_Elem(Cache_Elem &&) noexcept      = default;
+      constexpr Cache_Elem &operator=(Cache_Elem &&) noexcept = default;
+      constexpr Cache_Elem &operator=(const Cache_Elem &) noexcept = default;
+      ~Cache_Elem()                                                = default;
     };
 
     constexpr I_Cache(const System &sys, const std::uint32_t t_start) noexcept : start(t_start), cache{} { fill_cache(sys); }
@@ -516,7 +520,8 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
   I_Cache i_cache{ *this, 0 };
 
   template<typename Tracer = void (*)(const System &, std::uint32_t, Instruction)>
-  constexpr void run(const std::uint32_t loc, Tracer &&tracer = [](const System &, const auto, const auto) {}) noexcept
+  constexpr void run(const std::uint32_t loc,
+                     Tracer &&tracer = [](const System & /*unused*/, const auto /*unused*/, const auto /*unused*/) {}) noexcept
   {
     setup_run(loc);
     while (operations_remaining()) { next_operation(tracer); }

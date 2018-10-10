@@ -2,18 +2,24 @@
 #include <cassert>
 #include <iostream>
 
-// todo: make asserts into aborts if necessary?
+// TODO(jason): make asserts into aborts if necessary?
 
 namespace cpp_box::elf {
 
-// todo, move this into a shared utility location
+// TODO(jason): , move this into a shared utility location
 template<std::size_t Bytes, typename Data>
 [[nodiscard]] constexpr auto read_loc(const Data &data, const std::size_t loc, [[maybe_unused]] const bool little_endian) noexcept
 {
-  // todo : assert size is within bounds?
-  if constexpr (Bytes == 1) {
+  static_assert(Bytes == 1 || Bytes == 2 || Bytes == 4 || Bytes == 8);
+
+  // TODO(jason): assert size is within bounds?
+  if constexpr (Bytes == 1) {  // NOLINT broken clang-tidy check
+
+    // not much to do here
     return static_cast<std::uint8_t>(data[loc]);
-  } else if constexpr (Bytes == 2) {
+  }
+
+  if constexpr (Bytes == 2) {  // NOLINT broken clang-tidy check
     const std::uint16_t byte0 = data[loc];
     const std::uint16_t byte1 = data[loc + 1];
     if (little_endian) {
@@ -21,7 +27,9 @@ template<std::size_t Bytes, typename Data>
     } else {
       return static_cast<std::uint16_t>((byte0 << 8) | byte1);
     }
-  } else if constexpr (Bytes == 4) {
+  }
+
+  if constexpr (Bytes == 4) {  // NOLINT broken clang-tidy check
     const std::uint32_t byte0 = data[loc];
     const std::uint32_t byte1 = data[loc + 1];
     const std::uint32_t byte2 = data[loc + 2];
@@ -31,7 +39,9 @@ template<std::size_t Bytes, typename Data>
     } else {
       return (byte0 << 24) | (byte1 << 16) | (byte2 << 8) | byte3;
     }
-  } else if constexpr (Bytes == 8) {
+  }
+
+  if constexpr (Bytes == 8) {  // NOLINT broken clang-tidy check
     const std::uint64_t byte0 = data[loc];
     const std::uint64_t byte1 = data[loc + 1];
     const std::uint64_t byte2 = data[loc + 2];
@@ -45,8 +55,6 @@ template<std::size_t Bytes, typename Data>
     } else {
       return (byte0 << 56) | (byte1 << 48) | (byte2 << 40) | (byte3 << 32) | (byte4 << 24) | (byte5 << 16) | (byte6 << 8) | byte7;
     }
-  } else {
-    static_assert(Bytes == 1 || Bytes == 2 || Bytes == 4 || Bytes == 8);
   }
 }
 
@@ -255,11 +263,17 @@ struct Symbol_Table_Entry
 
   [[nodiscard]] constexpr auto section_header_table_index() const noexcept { return read(Fields::st_shndx); }
 
-  [[nodiscard]] constexpr auto name(const std::string_view string_table) const noexcept -> std::string_view
+  [[nodiscard]] constexpr auto name_substr(const std::basic_string_view<std::uint8_t> string_table) const noexcept
   {
     const auto name_loc   = name_offset();
     const auto name_start = string_table.substr(name_loc);
     return name_start.substr(0, name_start.find('\0'));
+  }
+
+  [[nodiscard]] auto name(const std::basic_string_view<std::uint8_t> string_table) const noexcept
+  {
+    const auto substr = name_substr(string_table);
+    return std::string_view{ reinterpret_cast<const char *>(substr.data()), substr.size() };  // NOLINT reintrepret_cast is safe here
   }
 
   [[nodiscard]] constexpr auto value() const noexcept { return read(Fields::st_value); }
@@ -405,11 +419,17 @@ struct Section_Header
 
   [[nodiscard]] constexpr auto offset() const noexcept { return read(Fields::sh_offset); }
 
-  [[nodiscard]] constexpr auto name(const std::string_view string_table) const noexcept -> std::string_view
+  [[nodiscard]] constexpr auto name_substr(const std::basic_string_view<std::uint8_t> string_table) const noexcept
   {
     const auto name_loc   = name_offset();
     const auto name_start = string_table.substr(name_loc);
     return name_start.substr(0, name_start.find('\0'));
+  }
+
+  [[nodiscard]] auto name(const std::basic_string_view<std::uint8_t> string_table) const noexcept
+  {
+    const auto substr = name_substr(string_table);
+    return std::string_view{ reinterpret_cast<const char *>(substr.data()), substr.size() };  // NOLINT reintrepret_cast is safe here
   }
 
   [[nodiscard]] constexpr auto size() const noexcept { return read(Fields::sh_size); }
@@ -619,11 +639,14 @@ struct File_Header
   };
 
 
-  constexpr File_Header(std::basic_string_view<std::uint8_t> t_data) : data(t_data) { assert(data.size() >= 64); }
+  constexpr explicit File_Header(std::basic_string_view<std::uint8_t> t_data) : data(t_data)
+  {
+    assert(data.size() >= 64);  // NOLINT for some unknown reason clang-tidy thinks this is a pointer decay
+  }
 
   std::basic_string_view<std::uint8_t> data;
 
-  // todo: move to shared code
+  // TODO(jason): move to shared code
   template<typename Itr, typename Itr2>[[nodiscard]] constexpr bool equal(Itr begin1, const Itr end1, Itr2 begin2) const noexcept
   {
     while (begin1 != end1) {
@@ -771,15 +794,14 @@ struct File_Header
 
   [[nodiscard]] constexpr auto section_header(const std::size_t entry) const noexcept -> Section_Header
   {
-    assert(entry < section_header_num_entries());
+    assert(entry < section_header_num_entries());  // NOLINT broken clang-tidy with assert
     return { bits_32(), little_endian(), data, data.substr(section_header_offset() + section_header_size() * entry) };
   }
 
-  [[nodiscard]] constexpr auto sh_string_table() const noexcept -> std::string_view
+  [[nodiscard]] constexpr auto sh_string_table() const noexcept
   {
     const auto string_header{ section_header(section_header_string_table_index()) };
-    const auto string_data{ string_header.section_data() };
-    return std::string_view{ reinterpret_cast<const char *>(string_data.data()), string_data.size() };
+    return string_header.section_data();
   }
 
 
@@ -788,25 +810,22 @@ struct File_Header
     return make_iterator([this](const std::size_t idx) { return section_header(idx); }, section_header_num_entries());
   }
 
-  [[nodiscard]] constexpr auto string_table() const noexcept -> std::string_view
+  [[nodiscard]] constexpr auto string_table() const noexcept
   {
     const auto sh_table = sh_string_table();
 
     for (const auto &section_header : section_headers()) {
-      if (section_header.name(sh_table) == ".strtab") {
-        const auto string_data{ section_header.section_data() };
-        return std::string_view{ reinterpret_cast<const char *>(string_data.data()), string_data.size() };
-      }
+      std::uint8_t str[] = ".strtab";
+      if (section_header.name_substr(sh_table) == str) { return section_header.section_data(); }
     }
 
     abort();
   }
 
-  [[nodiscard]] constexpr auto symbol_table() const noexcept {
+  [[nodiscard]] constexpr auto symbol_table() const noexcept
+  {
     for (const auto &section_header : section_headers()) {
-      if (section_header.symbol_table_num_entries() != 0) {
-        return section_header;
-      }
+      if (section_header.symbol_table_num_entries() != 0) { return section_header; }
     }
 
     abort();

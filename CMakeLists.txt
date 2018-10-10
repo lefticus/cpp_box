@@ -75,7 +75,6 @@ else()
                          )
 
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    target_link_libraries(project_options INTERFACE stdc++fs)
     target_compile_options(project_warnings
                            INTERFACE -Wmisleading-indentation # warn if identation implies blocks
                                                               # where blocks do not exist
@@ -90,6 +89,8 @@ else()
   else()
     if(LIBCPP)
       target_compile_options(project_options INTERFACE -stdlib=libc++)
+    else()
+      target_link_libraries(project_options INTERFACE stdc++fs)
     endif()
 
   endif()
@@ -119,14 +120,7 @@ if(NOT ONLY_COVERAGE)
   set(OpenGL_GL_PREFERENCE GLVND)
   find_package(OpenGL)
 
-  # imgui + sfml built as a lib, intentionally not using full warning flags
-  add_library(imgui
-              external/imgui/lib/imgui.cpp
-              external/imgui/lib/imgui_draw.cpp
-              external/imgui/lib/imgui-SFML.cpp)
-  target_link_libraries(imgui
-                        PUBLIC CONAN_PKG::sfml
-                               OpenGL::GL)
+  add_subdirectory(external)
 
   add_library(utility src/utility.cpp)
   target_link_libraries(utility PRIVATE project_options project_warnings PUBLIC CONAN_PKG::spdlog)
@@ -147,3 +141,6 @@ if(NOT ONLY_COVERAGE)
                                 CONAN_PKG::libpng)
   target_include_directories(cpp_box SYSTEM PRIVATE external)
 endif()
+
+
+
