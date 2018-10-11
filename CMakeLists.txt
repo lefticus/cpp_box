@@ -6,16 +6,6 @@ if (CCACHE)
   set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE})
 endif ()
 
-find_program(CPPCHECK cppcheck)
-if (CPPCHECK)
-  set(CMAKE_CXX_CPPCHECK ${CPPCHECK} --suppress=syntaxError --enable=all --inconclusive)
-endif ()
-
-find_program(CLANGTIDY clang-tidy)
-if (CLANGTIDY)
-  set(CMAKE_CXX_CLANG_TIDY ${CLANGTIDY})
-endif()
-
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup(TARGETS)
 
@@ -23,6 +13,27 @@ set(CMAKE_MODULE_PATH /usr/share/SFML/cmake/Modules)
 include(${CONAN_LIB_DIRS_CATCH2}/cmake/Catch2/Catch.cmake)
 
 option(BUILD_SHARED_LIBS "Enable compilation of shared libraries" FALSE)
+option(ENABLE_CLANG_TIDY "Enable testing with clang-tidy" FALSE)
+option(ENABLE_CPPCHECK "Enable testing with cppcheck" FALSE)
+
+if (ENABLE_CPPCHECK)
+  find_program(CPPCHECK cppcheck)
+  if (CPPCHECK)
+    set(CMAKE_CXX_CPPCHECK ${CPPCHECK} --suppress=syntaxError --enable=all --inconclusive)
+  else ()
+    message(SEND_ERROR "cppcheck requested but executable not found")
+  endif ()
+endif ()
+
+if (ENABLE_CLANG_TIDY)
+  find_program(CLANGTIDY clang-tidy)
+  if (CLANGTIDY)
+    set(CMAKE_CXX_CLANG_TIDY ${CLANGTIDY})
+  else ()
+    message(SEND_ERROR "clang-tidy requested but executable not found")
+  endif ()
+endif()
+
 
 # Link this 'library' to use the standard warnings
 add_library(project_warnings INTERFACE)
