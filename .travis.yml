@@ -5,7 +5,7 @@ matrix:
     - name: "gcc 7 Debug Coverage"
       os: linux
       sudo: false
-      env: COVERAGE=1 CXX_EXE=/usr/bin/g++-7 CC_EXE=/usr/bin/gcc-7 GCOV=/usr/bin/gcov-7 CMAKE_OPTS="-DCMAKE_BUILD_TYPE:STRING=Debug"
+      env: COVERAGE=1 CXX_EXE=/usr/bin/g++-7 CC_EXE=/usr/bin/gcc-7 GCOV=/usr/bin/gcov-7 CMAKE_OPTS="-DONLY_COVERAGE:BOOL=ON -DCMAKE_BUILD_TYPE:STRING=Debug"
       addons:
         apt:
           sources:
@@ -15,6 +15,20 @@ matrix:
             - libxrandr-dev
             - libudev-dev
             - g++-7
+    - name: "gcc 8 Debug"
+      os: linux
+      sudo: false
+      env: CXX_EXE=/usr/bin/g++-8 CC_EXE=/usr/bin/gcc-8 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-DCMAKE_BUILD_TYPE:STRING=Debug"
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - libx11-dev
+            - libxrandr-dev
+            - libudev-dev
+            - g++-8
+
 
 install:
   pip install --user conan cmake
