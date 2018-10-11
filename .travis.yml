@@ -17,9 +17,12 @@ matrix:
             - g++-7
 
 install:
-  pip install --user conan
+  pip install --user conan cmake
 
 script:
+  - $CXX_EXE --version
+  - which cmake
+  - cmake --version
   - export CXX=$CXX_EXE
   - export CC=$CC_EXE
   - echo $CXX

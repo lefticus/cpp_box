@@ -2,24 +2,22 @@
 #include <cassert>
 #include <iostream>
 
-// TODO(jason): make asserts into aborts if necessary?
+// TODO: make asserts into aborts if necessary?
 
 namespace cpp_box::elf {
 
-// TODO(jason): , move this into a shared utility location
+// TODO: , move this into a shared utility location
 template<std::size_t Bytes, typename Data>
 [[nodiscard]] constexpr auto read_loc(const Data &data, const std::size_t loc, [[maybe_unused]] const bool little_endian) noexcept
 {
   static_assert(Bytes == 1 || Bytes == 2 || Bytes == 4 || Bytes == 8);
 
-  // TODO(jason): assert size is within bounds?
-  if constexpr (Bytes == 1) {  // NOLINT broken clang-tidy check
-
-    // not much to do here
+  // TODO: assert size is within bounds?
+  if constexpr (Bytes == 1) {  // NOLINT broken clang-tidy with constexpr if
     return static_cast<std::uint8_t>(data[loc]);
   }
 
-  if constexpr (Bytes == 2) {  // NOLINT broken clang-tidy check
+  if constexpr (Bytes == 2) {  // NOLINT broken clang-tidy with constexpr if
     const std::uint16_t byte0 = data[loc];
     const std::uint16_t byte1 = data[loc + 1];
     if (little_endian) {
@@ -29,7 +27,7 @@ template<std::size_t Bytes, typename Data>
     }
   }
 
-  if constexpr (Bytes == 4) {  // NOLINT broken clang-tidy check
+  if constexpr (Bytes == 4) {  // NOLINT broken clang-tidy with constexpr if
     const std::uint32_t byte0 = data[loc];
     const std::uint32_t byte1 = data[loc + 1];
     const std::uint32_t byte2 = data[loc + 2];
@@ -41,7 +39,7 @@ template<std::size_t Bytes, typename Data>
     }
   }
 
-  if constexpr (Bytes == 8) {  // NOLINT broken clang-tidy check
+  if constexpr (Bytes == 8) {  // NOLINT broken clang-tidy with constexpr if
     const std::uint64_t byte0 = data[loc];
     const std::uint64_t byte1 = data[loc + 1];
     const std::uint64_t byte2 = data[loc + 2];
@@ -273,7 +271,7 @@ struct Symbol_Table_Entry
   [[nodiscard]] auto name(const std::basic_string_view<std::uint8_t> string_table) const noexcept
   {
     const auto substr = name_substr(string_table);
-    return std::string_view{ reinterpret_cast<const char *>(substr.data()), substr.size() };  // NOLINT reintrepret_cast is safe here
+    return std::string_view{ static_cast<const char *>(static_cast<const void *>(substr.data())), substr.size() };
   }
 
   [[nodiscard]] constexpr auto value() const noexcept { return read(Fields::st_value); }
@@ -429,7 +427,7 @@ struct Section_Header
   [[nodiscard]] auto name(const std::basic_string_view<std::uint8_t> string_table) const noexcept
   {
     const auto substr = name_substr(string_table);
-    return std::string_view{ reinterpret_cast<const char *>(substr.data()), substr.size() };  // NOLINT reintrepret_cast is safe here
+    return std::string_view{ static_cast<const char *>(static_cast<const void *>(substr.data())), substr.size() };
   }
 
   [[nodiscard]] constexpr auto size() const noexcept { return read(Fields::sh_size); }
@@ -639,14 +637,11 @@ struct File_Header
   };
 
 
-  constexpr explicit File_Header(std::basic_string_view<std::uint8_t> t_data) : data(t_data)
-  {
-    assert(data.size() >= 64);  // NOLINT for some unknown reason clang-tidy thinks this is a pointer decay
-  }
+  constexpr explicit File_Header(std::basic_string_view<std::uint8_t> t_data) : data(t_data) { assert(data.size() >= 64); }
 
   std::basic_string_view<std::uint8_t> data;
 
-  // TODO(jason): move to shared code
+  // TODO: move to shared code
   template<typename Itr, typename Itr2>[[nodiscard]] constexpr bool equal(Itr begin1, const Itr end1, Itr2 begin2) const noexcept
   {
     while (begin1 != end1) {
@@ -794,7 +789,7 @@ struct File_Header
 
   [[nodiscard]] constexpr auto section_header(const std::size_t entry) const noexcept -> Section_Header
   {
-    assert(entry < section_header_num_entries());  // NOLINT broken clang-tidy with assert
+    assert(entry < section_header_num_entries());
     return { bits_32(), little_endian(), data, data.substr(section_header_offset() + section_header_size() * entry) };
   }
 

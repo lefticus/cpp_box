@@ -27,14 +27,17 @@ template<typename EnumType, typename... Callables> struct StateMachine
 {
   std::tuple<StateTransition<EnumType, Callables>...> transitions;
 
-  constexpr StateMachine(StateTransition<EnumType, Callables>... t) : transitions(std::move(t)...) {}
+  explicit constexpr StateMachine(StateTransition<EnumType, Callables>... t) noexcept((std::is_nothrow_move_constructible_v<decltype(t)> && ...))
+    : transitions(std::move(t)...)
+  {
+  }
 
   template<size_t Count, size_t Index, typename Transitions, typename... Param>
   constexpr static EnumType transition_impl(const EnumType current_state, Transitions &&transitions, Param &&... params)
   {
-    if constexpr (Index == Count) {
+    if constexpr (Index == Count) {  // NOLINT broken clang tidy
       return current_state;
-    } else if constexpr (Index != Count) {
+    } else if constexpr (Index != Count) {  // NOLINT broken clang tidy
       if (std::get<Index>(std::forward<Transitions>(transitions)).test(current_state, std::forward<Param>(params)...)) {
         return std::get<Index>(std::forward<Transitions>(transitions)).to;
       } else {

@@ -8,7 +8,7 @@ endif ()
 
 find_program(CPPCHECK cppcheck)
 if (CPPCHECK)
-  set(CMAKE_CXX_CPPCHECK ${CPPCHECK} --enable=all --inconclusive)
+  set(CMAKE_CXX_CPPCHECK ${CPPCHECK} --suppress=syntaxError --enable=all --inconclusive)
 endif ()
 
 find_program(CLANGTIDY clang-tidy)
@@ -100,7 +100,7 @@ enable_testing()
 
 add_executable(constexpr_tests test/constexpr_tests.cpp)
 target_link_libraries(constexpr_tests PRIVATE project_options project_warnings CONAN_PKG::catch2)
-# catch_discover_tests(constexpr_tests TEST_PREFIX "constexpr.")
+catch_discover_tests(constexpr_tests TEST_PREFIX "constexpr.")
 
 add_executable(relaxed_constexpr_tests test/constexpr_tests.cpp)
 target_link_libraries(relaxed_constexpr_tests

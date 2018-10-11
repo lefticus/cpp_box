@@ -27,7 +27,7 @@ template<std::size_t Idx, typename F, typename V> constexpr decltype(auto) simpl
 }
 
 // Variation of the naive way: only loops as many times as there are set bits.
-// TODO(jason): Move into shared utility location
+// TODO: Move into shared utility location
 template<typename T>[[nodiscard]] constexpr T popcnt(T v) noexcept
 {
   T c{ 0 };
@@ -41,7 +41,7 @@ template<typename F, typename V> constexpr decltype(auto) simple_visit(F &&f, V 
   return (simple_visit_impl<0>(std::forward<F>(f), std::forward<V>(t)));
 }
 
-// TODO(jason): Move into shared utility location
+// TODO: Move into shared utility location
 template<typename Value, typename Bit>[[nodiscard]] constexpr bool test_bit(const Value val, const Bit bit) noexcept
 {
   return val & (static_cast<Value>(1) << bit);
@@ -252,7 +252,7 @@ struct Lookup_Table
 [[nodiscard]] constexpr auto get_lookup_table() noexcept
 {
   // hack for lack of constexpr std::bitset
-  // TODO(jason): use shared version
+  // TODO: use shared version
   constexpr const auto bitcount = [](const auto &table) {
     auto value = table.mask;
     int count  = 0;
@@ -480,7 +480,7 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
     {
       Instruction instruction{ 0 };
       Instruction_Type type{};
-      // TODO(jason) check if these are necessary in current MSVC, which is why they were added
+      // TODO check if these are necessary in current MSVC, which is why they were added
       constexpr Cache_Elem() noexcept                   = default;
       constexpr Cache_Elem(const Cache_Elem &) noexcept = default;
       constexpr Cache_Elem(Cache_Elem &&) noexcept      = default;

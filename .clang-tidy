@@ -1,9 +1,8 @@
 ---
-Checks:          '*,-google-runtime-references,-fuchsia*,-readability-else-after-return,-readability-avoid-const-params-in-decls,-hicpp-signed-bitwise,-cppcoreguidelines-pro-bounds-constant-array-index,-llvm-header-guard'
-WarningsAsErrors: ''
+Checks:          '*,-google-runtime-references,-fuchsia*,-readability-else-after-return,-readability-avoid-const-params-in-decls,-hicpp-signed-bitwise,-cppcoreguidelines-pro-bounds-constant-array-index,-llvm-header-guard,-readability-static-accessed-through-instance,-google-readability-todo'
+WarningsAsErrors: '*'
 HeaderFilterRegex: '.*'
 AnalyzeTemporaryDtors: false
 FormatStyle:     none
-# LineFilter: '[{"name":"file1.cpp","lines":[[1,3],[5,7]]}, {"name":"imgui.h"}, {"name":"*/imgui.cpp"}, {"name":"*/imgui_draw.cpp"}]'
 ...
 

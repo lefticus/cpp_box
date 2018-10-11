@@ -1,36 +1,36 @@
 #include "../include/cpp_box/arm.hpp"
 #include "../include/cpp_box/elf_reader.hpp"
-#include "../include/cpp_box/utility.hpp"
 #include "../include/cpp_box/state_machine.hpp"
+#include "../include/cpp_box/utility.hpp"
 
 #include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <future>
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <random>
+#include <regex>
+#include <sstream>
 #include <string>
 #include <vector>
-#include <fstream>
-#include <iostream>
-#include <iomanip>
-#include <regex>
-#include <filesystem>
-#include <random>
-#include <future>
-#include <sstream>
-#include <memory>
 
-#include "imgui/lib/imgui.h"
 #include "imgui/lib/imgui-SFML.h"
+#include "imgui/lib/imgui.h"
 
 #include "../include/cpp_box/utility.hpp"
 
+#include <SFML/Graphics/CircleShape.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
+#include <SFML/Graphics/Sprite.hpp>
+#include <SFML/Graphics/Texture.hpp>
 #include <SFML/System/Clock.hpp>
 #include <SFML/Window/Event.hpp>
-#include <SFML/Graphics/CircleShape.hpp>
-#include <SFML/Graphics/Texture.hpp>
-#include <SFML/Graphics/Sprite.hpp>
 
-#include <spdlog/spdlog.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
 #include <rang.hpp>
+#include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/spdlog.h>
 
 struct Box
 {
@@ -85,7 +85,7 @@ struct Box
   {
     std::string disassembly;
     std::filesystem::path filename;
-    int line_number;
+    int line_number{};
     std::string section;
     std::string function_name;
   };
@@ -150,6 +150,11 @@ struct Box
     return { std::string{ data->begin(), data->end() }, "", {}, {}, {}, false, {}, {} };
   }
 
+  // TODO: Make this return stdout/stderr from system call
+  // TODO: Put this in a reusable place
+  static void make_system_call(const std::string &str) {
+    std::system(str.c_str()); // NOLINT we need to make system calls to execute compiler
+  }
 
   // TODO: Make optimization level, standard, strongly typed things
   static Loaded_Files compile(const std::string &t_str,
@@ -190,7 +195,7 @@ struct Box
       std::string(t_optimization_level)));
 
     logger.debug("Executing compile command: '{}'", build_command);
-    std::system(build_command.c_str());
+    make_system_call(build_command);
     const auto assembly = cpp_box::utility::read_file(asm_file);
     auto loaded         = load_unknown(obj_file, logger);
 
@@ -200,10 +205,10 @@ struct Box
                                                                obj_file.string(),
                                                                disassembly_file.string()));
     logger.debug("Executing disassemble command: '{}'", disassemble_command);
-    std::system(disassemble_command.c_str());
+    make_system_call(disassemble_command);
 
 
-    const std::regex strip_attributes{ "\\n\\s+\\..*", std::regex::ECMAScript };
+    const std::regex strip_attributes{ R"(\n\s+\..*)", std::regex::ECMAScript };
     dump_rom(loaded.image);
 
     const auto parse_disassembly = [&logger](const std::string &file, const auto &section_offsets) {
@@ -243,7 +248,7 @@ struct Box
           current_offset = static_cast<std::uint32_t>(std::stoi(results.str(1), nullptr, 16));
 
           logger.trace("Disassembly: '{:08x}', '{}'", value, results.str(6));
-          memory_locations[static_cast<std::int32_t>(current_offset + section_offsets.at(current_section))] =
+          memory_locations[static_cast<std::uint32_t>(current_offset + section_offsets.at(current_section))] =
             Memory_Location{ results.str(6), current_file_name, current_line_number, current_section, current_function_name };
 
         } else if (std::regex_match(line, results, read_section_name)) {
@@ -300,10 +305,10 @@ struct Box
     std::array<std::uint32_t, 16> last_registers{};
     std::uint32_t last_CSPR{};
 
-    /// TODO: move somewhere shared
+    // TODO: move somewhere shared
     struct Timer
     {
-      Timer(const float timeoutInSeconds) noexcept : timeout{ timeoutInSeconds } {}
+      explicit Timer(const float timeoutInSeconds) noexcept : timeout{ timeoutInSeconds } {}
       bool expired() const noexcept { return timer.getElapsedTime().asSeconds() >= timeout; }
       void reset() noexcept { timer.restart(); }
 
@@ -325,18 +330,18 @@ struct Box
     sf::Sprite sprite;
 
     static constexpr auto FPS               = 30;
-    static constexpr const auto opsPerFrame = 10000000 / FPS;
+    static constexpr const auto opsPerFrame = 30'000'000 / FPS;
 
-    static constexpr auto s_build_ready       = [](const auto &status, const auto &) { return status.build_ready(); };
-    static constexpr auto s_running           = [](const auto &status, const auto &) { return !status.paused && status.build_good(); };
-    static constexpr auto s_paused            = [](const auto &status, const auto &) { return status.paused && status.build_good(); };
-    static constexpr auto s_failed            = [](const auto &status, const auto &) { return !status.build_good(); };
-    static constexpr auto s_static_timer      = [](const auto &status, const auto &) { return !status.static_timer.expired(); };
-    static constexpr auto s_can_start_build   = [](const auto &status, const auto &) { return status.needs_build && !status.is_building(); };
-    static constexpr auto s_always_true       = [](const auto &, const auto &) { return true; };
-    static constexpr auto s_reset_pressed     = [](const auto &, const auto &inputs) { return inputs.reset_pressed; };
-    static constexpr auto s_step_pressed      = [](const auto &, const auto &inputs) { return inputs.step_pressed; };
-    static constexpr auto s_goal_check_needed = [](const auto &status, const auto &) {
+    static constexpr auto s_build_ready       = [](const auto &status, const auto & /**/) { return status.build_ready(); };
+    static constexpr auto s_running           = [](const auto &status, const auto & /**/) { return !status.paused && status.build_good(); };
+    static constexpr auto s_paused            = [](const auto &status, const auto & /**/) { return status.paused && status.build_good(); };
+    static constexpr auto s_failed            = [](const auto &status, const auto & /**/) { return !status.build_good(); };
+    static constexpr auto s_static_timer      = [](const auto &status, const auto & /**/) { return !status.static_timer.expired(); };
+    static constexpr auto s_can_start_build   = [](const auto &status, const auto & /**/) { return status.needs_build && !status.is_building(); };
+    static constexpr auto s_always_true       = [](const auto & /**/, const auto & /**/) { return true; };
+    static constexpr auto s_reset_pressed     = [](const auto & /**/, const auto &inputs) { return inputs.reset_pressed; };
+    static constexpr auto s_step_pressed      = [](const auto & /**/, const auto &inputs) { return inputs.step_pressed; };
+    static constexpr auto s_goal_check_needed = [](const auto &status, const auto & /**/) {
       return !status.goals[status.current_goal].completed && !status.sys->operations_remaining();
     };
 
@@ -467,6 +472,13 @@ struct Box
     };
   };
 
+  template<typename StringType, typename... Params> void text(const bool enabled, const StringType &format_str, Params &&... params)
+  {
+    if (!enabled) { ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]); }
+    const auto s = fmt::format(static_cast<const char *>(format_str), std::forward<Params>(params)...);
+    ImGui::TextUnformatted(&(*s.begin()), &(*s.end()));
+    if (!enabled) { ImGui::PopStyleColor(); }
+  }
 
   Inputs draw_interface(Status &status)
   {
@@ -493,8 +505,7 @@ struct Box
       ImGui::InputFloat("Zoom", &scale_factor, 0.5f, 0.0f, 1);
       ImGui::InputFloat("Output Zoom", &sprite_scale_factor, 0.5f, 0.0f, 1);
       const auto elapsedSeconds = status.framerateClock.restart().asSeconds();
-      ImGui::Text(
-        "%02.2f FPS ~%02.2f Mhz", static_cast<double>(1 / elapsedSeconds), static_cast<double>(status.opsPerFrame / elapsedSeconds / 1000000));
+      text(true, "{:2.2f} FPS ~{:2.2f} Mhz", 1 / elapsedSeconds, status.opsPerFrame / elapsedSeconds / 1000000);
 
       status.rescale_display(scale_factor, sprite_scale_factor);
     }
@@ -512,33 +523,25 @@ struct Box
       if (ImGui::CollapsingHeader("Registers")) {
         for (std::size_t i = 0; i < 16; ++i) {
           switch (i) {
-          case 13: ImGui::Text("SP "); break;
-          case 14: ImGui::Text("LR "); break;
-          case 15: ImGui::Text("PC "); break;
-          default: ImGui::Text("R%-2i", static_cast<int>(i));
+          case 13: text(true, "SP "); break;
+          case 14: text(true, "LR "); break;
+          case 15: text(true, "PC "); break;
+          default: text(true, "R{:<2}", i);
           }
           ImGui::SameLine();
-          if (status.sys->registers[i] == status.last_registers[i]) {
-            ImGui::TextDisabled("%08x", status.sys->registers[i]);
-          } else {
-            ImGui::Text("%08x", status.sys->registers[i]);
-          }
+          text(status.sys->registers[i] != status.last_registers[i], "{:08x}", status.sys->registers[i]);
           if (i != 7 && i != 15) { ImGui::SameLine(); }
         }
 
 
-        ImGui::Text("     NZCV                    IFT     ");
+        text(true, "     NZCV                    IFT     ");
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 2, 0 });
-        ImGui::Text("CSPR ");
+        text(true, "CSPR ");
         for (std::size_t bit = 0; bit < 32; ++bit) {
           ImGui::SameLine();
           const auto new_bit = cpp_box::arm::test_bit(status.sys->CSPR, 31 - bit);
           const auto old_bit = cpp_box::arm::test_bit(status.last_CSPR, 31 - bit);
-          if (new_bit == old_bit) {
-            ImGui::TextDisabled("%i", cpp_box::arm::test_bit(status.sys->CSPR, 31 - bit));
-          } else {
-            ImGui::Text("%i", cpp_box::arm::test_bit(status.sys->CSPR, 31 - bit));
-          }
+          text(new_bit != old_bit, "{:d}", cpp_box::arm::test_bit(status.sys->CSPR, 31 - bit));
         }
         ImGui::PopStyleVar();
       }
@@ -549,51 +552,37 @@ struct Box
         const auto pc                   = status.sys->PC() - 4;
         const std::uint32_t pc_start    = pc < 5 * 4 ? 0 : pc - 5 * 4;
 
-        ImGui::Text("Stack Pointer (SP)     Next Instruction (PC-4)");
+        text(true, "Stack Pointer (SP)     Next Instruction (PC-4)");
 
         for (std::uint32_t idx = 0; idx < 44; idx += 4) {
           const auto sp_loc = stack_start - idx;
-          if (sp_loc == sp) {
-            ImGui::Text("%08x: %08x    ", sp_loc, status.sys->read_word(sp_loc));
-          } else {
-            ImGui::TextDisabled("%08x: %08x    ", sp_loc, status.sys->read_word(sp_loc));
-          }
+          text(sp_loc != sp, "{:08x}: {:08x}    ", sp_loc, status.sys->read_word(sp_loc));
           ImGui::SameLine();
           const auto pc_loc = pc_start + idx;
           const auto word   = status.sys->read_word(pc_loc);
-          if (pc_loc == pc) {
-            ImGui::Text("%08x: %08x %s",
-                        pc_loc,
-                        word,
-                        status.loaded_files.location_data[pc_loc - static_cast<std::uint32_t>(Memory_Map::USER_RAM_START)].disassembly.c_str());
-          } else {
-            ImGui::TextDisabled(
-              "%08x: %08x %s",
-              pc_loc,
-              word,
-              status.loaded_files.location_data[pc_loc - static_cast<std::uint32_t>(Memory_Map::USER_RAM_START)].disassembly.c_str());
-          }
+          text(pc_loc == pc,
+               "{:08x}: {:08x} {}",
+               pc_loc,
+               word,
+               status.loaded_files.location_data[pc_loc - static_cast<std::uint32_t>(Memory_Map::USER_RAM_START)].disassembly.c_str());
         }
       }
+
 
       if (ImGui::CollapsingHeader("Source")) {
         const auto pc              = status.sys->PC() - 4;
         const auto object_loc      = pc - static_cast<uint32_t>(Memory_Map::USER_RAM_START);
         const auto current_linenum = status.loaded_files.location_data[object_loc].line_number;
-        const auto size            = ImGui::GetContentRegionMax();
         ImGui::BeginChild("Active Source", { ImGui::GetContentRegionAvailWidth(), 300 });
         std::size_t endl  = 0;
         std::size_t begin = 0;
         int linenum       = 1;
         while (endl != std::string::npos) {
-          begin           = std::exchange(endl, status.loaded_files.src.find('\n', endl));
-          const auto line = status.loaded_files.src.substr(begin, endl - begin);
-          if (linenum == current_linenum) {
-            ImGui::Text("%4i: %s", linenum, line.c_str());
-            ImGui::SetScrollHere();
-          } else {
-            ImGui::TextDisabled("%4i: %s", linenum, line.c_str());
-          }
+          begin                   = std::exchange(endl, status.loaded_files.src.find('\n', endl));
+          const auto line         = status.loaded_files.src.substr(begin, endl - begin);
+          const auto current_line = linenum == current_linenum;
+          text(current_line, "{:4}: {}", linenum, line);
+          if (current_line) { ImGui::SetScrollHere(); }
           if (endl != std::string::npos) { ++endl; }
           ++linenum;
         }
@@ -636,16 +625,16 @@ struct Box
     {
       auto current_goal = static_cast<int>(status.current_goal);
       ImGui::SliderInt("Current Goal", &current_goal, 0, static_cast<int>(status.goals.size() - 1));
-      status.current_goal = current_goal;
+      status.current_goal = static_cast<decltype(status.current_goal)>(current_goal);
       auto &goal          = status.goals.at(status.current_goal);
       ImGui::Separator();
       bool completed = goal.completed;
       ImGui::Checkbox("", &completed);
       ImGui::SameLine();
-      ImGui::Text("%s", goal.name.c_str());
-      ImGui::Text("%s", goal.description.c_str());
+      text(true, "{}", goal.name);
+      text(true, "{}", goal.description);
       for (std::size_t clue = 0; clue < goal.hints.size(); ++clue) {
-        if (ImGui::CollapsingHeader("%s", fmt::format("Show Hint #{}", clue).c_str())) { ImGui::Text("%s", goal.hints[clue].c_str()); }
+        if (ImGui::CollapsingHeader("%s", fmt::format("Show Hint #{}", clue).c_str())) { text(true, "{}", goal.hints[clue]); }
       }
     }
     ImGui::End();
@@ -687,7 +676,8 @@ struct Box
   void event_loop(const std::filesystem::path &original_path)
   {
     std::uniform_int_distribution<std::uint16_t> distribution(0, 255);
-    std::default_random_engine generator;
+    std::random_device r;
+    std::default_random_engine generator{ r() };
 
 
     console->set_level(spdlog::level::trace);
@@ -709,7 +699,7 @@ struct Box
 
     while (window.isOpen()) {
 
-      sf::Event event;
+      sf::Event event{};
       while (window.pollEvent(event)) {
         ImGui::SFML::ProcessEvent(event);
 
@@ -794,6 +784,6 @@ struct Box
 int main(const int argc, const char *argv[])
 {
   Box box;
-
-  box.event_loop(argc == 2 ? argv[1] : "");
+  std::vector<std::string> args{ argv, std::next(argv, argc) };
+  box.event_loop(args.size() == 2 ? args[1] : "");
 }
