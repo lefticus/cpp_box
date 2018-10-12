@@ -44,27 +44,4 @@ task:
   - cd build
   - ctest -j2
 
-task:
-  name: clang7-Release-FullBuild-libc++
-  container:
-    image: conanio/clang7
-  build_script:
-  - sudo apt-get update
-  - sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git
-  - pwd
-  - clang++ --version
-  - cmake --version
-  - conan --version
-  - export CXX=`which clang++`
-  - export CC=`which clang`
-  - mkdir build
-  - cd build
-  - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
-  - cmake -D LIBCPP:BOOL=ON -D CMAKE_BUILD_TYPE:STRING=Release ..
-  - VERBOSE=1 cmake --build . -- -j2
-  test_script:
-  - pwd
-  - cd build
-  - ctest -j2
-
 
