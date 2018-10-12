@@ -97,11 +97,10 @@ task:
     image: conanio/clang7
   build_script:
   - sudo apt-get update
-  - sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git clang-tools-7
+  - sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git clang-format-7
   - pwd
   - clang++ --version
   - ls /usr/bin/clang*
-  - ls /usr/local/bin/clang*
   - cmake --version
   - conan --version
   - export CXX=`which clang++`
