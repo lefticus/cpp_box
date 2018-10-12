@@ -155,7 +155,7 @@ struct Box
   // TODO: Put this in a reusable place
   static void make_system_call(const std::string &str)
   {
-    std::system(str.c_str());  // NOLINT we need to make system calls to execute compiler
+    [[maybe_unused]] const auto result = std::system(str.c_str());  // NOLINT we need to make system calls to execute compiler
   }
 
   // TODO: Make optimization level, standard, strongly typed things
