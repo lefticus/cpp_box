@@ -31,6 +31,7 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <rang.hpp>
+#include <clara.hpp>
 
 struct Box
 {
@@ -649,12 +650,12 @@ struct Box
         status.update_display();
         break;
       case Status::States::Begin_Build:
-        status.future_build = std::async(std::launch::async, [console = this->console, src = status.loaded_files.src]() {
+        status.future_build = std::async(std::launch::async, [console = this->console, src = status.loaded_files.src, compiler = this->compiler]() {
         // string is oversized to allow for a buffer for IMGUI, need to only compile the first part of it
 #if defined(_MSC_VER)
-          return compile(src.substr(0, src.find('\0')), R"(C:\Program Files\LLVM\bin\clang++)", "3", "c++2a", *console);
+          return compile(src.substr(0, src.find('\0')), compiler, "3", "c++2a", *console);
 #else
-          return compile(src.substr(0, src.find('\0')), "/usr/local/bin/clang++", "3", "c++2a", *console);
+          return compile(src.substr(0, src.find('\0')), compiler, "3", "c++2a", *console);
 #endif
         });
         status.needs_build = false;
@@ -708,12 +709,41 @@ struct Box
   }
 
   std::shared_ptr<spdlog::logger> console{ spdlog::stdout_color_mt("console") };
+
+  std::filesystem::path compiler{};
+
+  explicit Box(std::filesystem::path t_compiler) : compiler(std::move(t_compiler)) {}
 };
 
 
 int main(const int argc, const char *argv[])
 {
-  Box box;
+  using clara::Opt;
+  using clara::Arg;
+  using clara::Args;
+  using clara::Help;
+  bool showHelp{ false };
+  std::filesystem::path initialFile;
+#if defined(_MSC_VER)
+  std::filesystem::path compiler("/usr/local/bin/clang++");
+#else
+  std::filesystem::path compiler(R"(C:\Program Files\LLVM\bin\clang++)");
+#endif
+  auto cli = Help(showHelp) | Opt(compiler, "path")["--compiler"]("compile C++ with <compiler>")
+             | Arg(initialFile, "file")("load <file> as an initial program");
 
-  box.event_loop(argc == 2 ? argv[1] : "");
+  auto result = cli.parse(Args(argc, argv));
+  if (!result) {
+    std::cerr << "Error in command line: " << result.errorMessage() << '\n';
+    return 1;
+  }
+
+  if (showHelp) {
+    std::cout << cli << '\n';
+    return 0;
+  }
+
+  Box box(compiler);
+
+  box.event_loop(initialFile);
 }
