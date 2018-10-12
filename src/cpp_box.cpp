@@ -478,7 +478,9 @@ struct Box
   {
     if (!enabled) { ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]); }
     const auto s = fmt::format(static_cast<const char *>(format_str), std::forward<Params>(params)...);
-    ImGui::TextUnformatted(s.c_str(), std::next(s.c_str(), s.size()));
+    const auto begin = s.c_str();
+    const auto end = begin + s.size(); // NOLINT, this is save ptr arithmetic and std::next requires a signed type :P
+    ImGui::TextUnformatted(begin, end);
     if (!enabled) { ImGui::PopStyleColor(); }
   }
 
