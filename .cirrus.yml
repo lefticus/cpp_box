@@ -97,7 +97,7 @@ task:
     image: conanio/clang7
   build_script:
   - sudo apt-get update
-  - sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git clang-7 clang-format-7 clang-tools-7
+  - sudo apt-get install --reinstall --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git clang-7 clang-format-7 clang-tools-7
   - pwd
   - clang++ --version
   - ls /usr/bin/clang*
