@@ -9,6 +9,7 @@
 #include <future>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <random>
 #include <regex>
@@ -98,8 +99,8 @@ struct Box
     std::string assembly;
     // ptr to ensure that the string_view into the image cannot be invalidated
     // todo: find a better option for this?
-    std::unique_ptr<std::vector<std::uint8_t>> binary_file;
-    std::basic_string_view<std::uint8_t> image;
+    std::unique_ptr<std::vector<std::uint8_t>> binary_file{};
+    std::basic_string_view<std::uint8_t> image{};
     std::uint64_t entry_point{};
     bool good_binary{ false };
     std::unordered_map<std::uint32_t, Memory_Location> location_data;
@@ -366,7 +367,6 @@ struct Box
                                             cpp_box::state_machine::StateTransition{ States::Running, States::Check_Goal, s_goal_check_needed },
                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Reset, s_reset_pressed },
                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Parse_Build_Results, s_build_ready },
-                                            cpp_box::state_machine::StateTransition{ States::Paused, States::Running, s_running },
                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Step_One, s_step_pressed },
                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Begin_Build, s_can_start_build },
                                             cpp_box::state_machine::StateTransition{ States::Parse_Build_Results, States::Reset, s_always_true },
@@ -478,7 +478,7 @@ struct Box
   {
     if (!enabled) { ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]); }
     const auto s = fmt::format(static_cast<const char *>(format_str), std::forward<Params>(params)...);
-    ImGui::TextUnformatted(&(*s.begin()), &(*s.end()));
+    ImGui::TextUnformatted(s.c_str(), std::next(s.c_str(), s.size()));
     if (!enabled) { ImGui::PopStyleColor(); }
   }
 
@@ -796,9 +796,9 @@ int main(const int argc, const char *argv[])
   bool showHelp{ false };
   std::filesystem::path initialFile;
 #if defined(_MSC_VER)
-  std::filesystem::path compiler("/usr/local/bin/clang++");
-#else
   std::filesystem::path compiler(R"(C:\Program Files\LLVM\bin\clang++)");
+#else
+  std::filesystem::path compiler("/usr/local/bin/clang++");
 #endif
   auto cli = Help(showHelp) | Opt(compiler, "path")["--compiler"]("compile C++ with <compiler>")
              | Arg(initialFile, "file")("load <file> as an initial program");

@@ -73,9 +73,8 @@ int main(const int argc, const char *argv[])
 
     auto last_registers = sys.registers;
     int opcount         = 0;
-    const auto tracer   = [&opcount]([[maybe_unused]] const auto &t_sys, [[maybe_unused]] const auto t_pc, [[maybe_unused]] const auto t_ins) {
-      ++opcount;
-    };
+    const auto tracer =
+      [&opcount]([[maybe_unused]] const auto & /*t_sys*/, [[maybe_unused]] const auto /*t_pc*/, [[maybe_unused]] const auto /*t_ins*/) { ++opcount; };
 
     sys.run(0x00000000, tracer);
 

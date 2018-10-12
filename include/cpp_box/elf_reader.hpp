@@ -266,7 +266,7 @@ struct Symbol_Table_Entry
   {
     const auto name_loc   = name_offset();
     const auto name_start = string_table.substr(name_loc);
-    return name_start.substr(0, name_start.find('\0'));
+    return name_start.substr(0, name_start.find(static_cast<std::uint8_t>('\0')));
   }
 
   [[nodiscard]] auto name(const std::basic_string_view<std::uint8_t> string_table) const noexcept
@@ -422,7 +422,7 @@ struct Section_Header
   {
     const auto name_loc   = name_offset();
     const auto name_start = string_table.substr(name_loc);
-    return name_start.substr(0, name_start.find('\0'));
+    return name_start.substr(0, name_start.find(static_cast<std::uint8_t>('\0')));
   }
 
   [[nodiscard]] auto name(const std::basic_string_view<std::uint8_t> string_table) const noexcept

@@ -6,39 +6,10 @@ if(CCACHE)
   set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE})
 endif()
 
-if(NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
-  message(STATUS "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")
-  file(DOWNLOAD "https://raw.githubusercontent.com/conan-io/cmake-conan/v0.12/conan.cmake"
-                "${CMAKE_BINARY_DIR}/conan.cmake")
-endif()
 
-include(${CMAKE_BINARY_DIR}/conan.cmake)
-conan_cmake_run(CONANFILE conanfile.txt BASIC_SETUP CMAKE_TARGETS BUILD missing)
-
-set(CMAKE_MODULE_PATH /usr/share/SFML/cmake/Modules)
-include(${CONAN_LIB_DIRS_CATCH2}/cmake/Catch2/Catch.cmake)
-
-option(BUILD_SHARED_LIBS "Enable compilation of shared libraries" FALSE)
-option(ENABLE_CLANG_TIDY "Enable testing with clang-tidy" FALSE)
-option(ENABLE_CPPCHECK "Enable testing with cppcheck" FALSE)
-
-if(ENABLE_CPPCHECK)
-  find_program(CPPCHECK cppcheck)
-  if(CPPCHECK)
-    set(CMAKE_CXX_CPPCHECK ${CPPCHECK} --suppress=syntaxError --enable=all --inconclusive)
-  else()
-    message(SEND_ERROR "cppcheck requested but executable not found")
-  endif()
-endif()
-
-if(ENABLE_CLANG_TIDY)
-  find_program(CLANGTIDY clang-tidy)
-  if(CLANGTIDY)
-    set(CMAKE_CXX_CLANG_TIDY ${CLANGTIDY})
-  else()
-    message(SEND_ERROR "clang-tidy requested but executable not found")
-  endif()
-endif()
+##
+## Set compiler flags before running conan
+##
 
 # Link this 'library' to use the standard warnings
 add_library(project_warnings INTERFACE)
@@ -50,7 +21,7 @@ target_compile_features(project_options INTERFACE cxx_std_17)
 target_include_directories(project_options INTERFACE include external)
 
 if(MSVC)
-  target_compile_options(project_warnings INTERFACE /W4)
+  target_compile_options(project_warnings INTERFACE /W4 /WX "/permissive-")
 else()
   option(ONLY_COVERAGE "Build only tests necessary for coverage" FALSE)
   option(LIBCPP "Build with libc++" FALSE)
@@ -114,6 +85,60 @@ else()
   endif()
 endif()
 
+##
+## Load Conan
+##
+
+if(NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
+  message(STATUS "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")
+  file(DOWNLOAD "https://raw.githubusercontent.com/conan-io/cmake-conan/v0.12/conan.cmake"
+                "${CMAKE_BINARY_DIR}/conan.cmake")
+endif()
+
+
+include(${CMAKE_BINARY_DIR}/conan.cmake)
+conan_check(REQUIRED)
+conan_cmake_run(CONANFILE conanfile.txt BASIC_SETUP CONAN_COMMAND ${CONAN_CMD} CMAKE_TARGETS BUILD missing)
+set(CMAKE_MODULE_PATH /usr/share/SFML/cmake/Modules)
+
+if (CONAN_CATCH2_ROOT_DEBUG)
+  include(${CONAN_CATCH2_ROOT_DEBUG}/lib/cmake/Catch2/Catch.cmake)
+else ()
+  include(${CONAN_CATCH2_ROOT}/lib/cmake/Catch2/Catch.cmake)
+endif ()
+
+
+##
+## Options
+##
+
+option(BUILD_SHARED_LIBS "Enable compilation of shared libraries" FALSE)
+option(ENABLE_CLANG_TIDY "Enable testing with clang-tidy" FALSE)
+option(ENABLE_CPPCHECK "Enable testing with cppcheck" FALSE)
+
+if(ENABLE_CPPCHECK)
+  find_program(CPPCHECK cppcheck)
+  if(CPPCHECK)
+    set(CMAKE_CXX_CPPCHECK ${CPPCHECK} --suppress=syntaxError --enable=all --inconclusive)
+  else()
+    message(SEND_ERROR "cppcheck requested but executable not found")
+  endif()
+endif()
+
+if(ENABLE_CLANG_TIDY)
+  find_program(CLANGTIDY clang-tidy)
+  if(CLANGTIDY)
+    set(CMAKE_CXX_CLANG_TIDY ${CLANGTIDY})
+  else()
+    message(SEND_ERROR "clang-tidy requested but executable not found")
+  endif()
+endif()
+
+
+##
+## Project Setup
+##
+
 enable_testing()
 
 add_executable(constexpr_tests test/constexpr_tests.cpp)
@@ -147,7 +172,7 @@ if(NOT ONLY_COVERAGE)
   find_package(Threads REQUIRED)
 
   # imgui test executable, with full warnings enabled
-  add_executable(cpp_box WIN32 src/cpp_box.cpp)
+  add_executable(cpp_box src/cpp_box.cpp)
   target_link_libraries(cpp_box
                         PRIVATE project_options
                                 project_warnings
