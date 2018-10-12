@@ -1,7 +1,7 @@
 task:
   name: gcc8-Release-FullBuild
   container:
-    image: lasote/conangcc8
+    image: conanio/gcc8
   build_script:
   - sudo apt-get update
   - sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git
@@ -22,9 +22,9 @@ task:
   - ctest -j2
 
 task:
-  name: clang6-Release-FullBuild-libstdc++
+  name: clang7-Release-FullBuild-libstdc++
   container:
-    image: lasote/conanclang60
+    image: conanio/clang7
   build_script:
   - sudo apt-get update
   - sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git
@@ -45,9 +45,9 @@ task:
   - ctest -j2
 
 task:
-  name: clang6-Release-FullBuild-libc++
+  name: clang7-Release-FullBuild-libc++
   container:
-    image: lasote/conanclang60
+    image: conanio/clang7
   build_script:
   - sudo apt-get update
   - sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git
