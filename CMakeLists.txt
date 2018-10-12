@@ -107,6 +107,7 @@ else()
     if(LIBCPP)
       target_compile_options(project_options INTERFACE -stdlib=libc++)
     else()
+      target_link_libraries(project_options INTERFACE stdc++fs)
     endif()
 
   endif()
