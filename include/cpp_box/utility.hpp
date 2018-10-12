@@ -18,7 +18,8 @@ namespace cpp_box::utility {
 std::vector<uint8_t> read_file(const std::filesystem::path &t_path);
 
 
-inline void runtime_assert(bool condition) {
+constexpr inline void runtime_assert(bool condition)
+{
   if (!condition) { abort(); }
 }
 
