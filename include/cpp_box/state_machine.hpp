@@ -40,9 +40,9 @@ template<typename EnumType, typename... Callables> struct StateMachine
     if (std::get<Index>(std::forward<Transitions>(transitions)).test(current_state, std::forward<Param>(params)...)) {
       return std::get<Index>(std::forward<Transitions>(transitions)).to;
     } else {
-      if constexpr (Index + 1 < Count) {  // NLINT broken clang tidy
+      if constexpr (Index + 1 < Count) {  // NOLINT broken clang tidy
         return transition_impl<Count, Index + 1>(current_state, std::forward<Transitions>(transitions), std::forward<Param>(params)...);
-      } else {
+      } else { // NOLINT broken clang tidy
         return current_state;
       }
     }
