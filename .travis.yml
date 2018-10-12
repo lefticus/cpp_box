@@ -15,19 +15,6 @@ matrix:
             - libxrandr-dev
             - libudev-dev
             - g++-7
-    - name: "gcc 8 Debug"
-      os: linux
-      sudo: false
-      env: CXX_EXE=/usr/bin/g++-8 CC_EXE=/usr/bin/gcc-8 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-DCMAKE_BUILD_TYPE:STRING=Debug"
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - libx11-dev
-            - libxrandr-dev
-            - libudev-dev
-            - g++-8
     - name: "clang 7 Debug (ONLY_COVERAGE libstdc++)"
       os: linux
       sudo: false
@@ -45,6 +32,7 @@ matrix:
             - clang-tools-7
             - libc++-7-dev 
             - libc++abi-7-dev
+            - zlib1g-dev
     - name: "clang 7 Debug (libc++)"
       os: linux
       sudo: false
@@ -62,8 +50,7 @@ matrix:
             - clang-tools-7
             - libc++-7-dev 
             - libc++abi-7-dev
-
-
+            - zlib1g-dev
 
 
 
