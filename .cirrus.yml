@@ -101,7 +101,7 @@ task:
   - sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git clang-tools-7
   - pwd
   - clang++ --version
-  - clang-tidy --version
+  - clang-tidy-7 --version
   - cmake --version
   - conan --version
   - export CXX=`which clang++`
@@ -109,7 +109,7 @@ task:
   - mkdir build
   - cd build
   - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
-  - cmake  -D ENABLE_CLANG_TIDY:BOOL=ON -D CMAKE_BUILD_TYPE:STRING=Debug ..
+  - cmake -D CLANGTIDY:PATH=`which clang-tidy-7` -D ENABLE_CLANG_TIDY:BOOL=ON -D CMAKE_BUILD_TYPE:STRING=Debug ..
   - VERBOSE=1 cmake --build . -- -j2
   test_script:
   - pwd
