@@ -14,7 +14,6 @@ task:
   - mkdir build
   - cd build
   - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
-  - conan install .. --build missing
   - cmake -D CMAKE_BUILD_TYPE:STRING=Release ..
   - VERBOSE=1 cmake --build . -- -j2
   test_script:

@@ -2,12 +2,18 @@ cmake_minimum_required(VERSION 3.10)
 project(TheCppBox VERSION 0.0.1 LANGUAGES CXX)
 
 find_program(CCACHE ccache)
-if (CCACHE)
+if(CCACHE)
   set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE})
-endif ()
+endif()
 
-include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
-conan_basic_setup(TARGETS)
+if(NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
+  message(STATUS "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")
+  file(DOWNLOAD "https://raw.githubusercontent.com/conan-io/cmake-conan/v0.12/conan.cmake"
+                "${CMAKE_BINARY_DIR}/conan.cmake")
+endif()
+
+include(${CMAKE_BINARY_DIR}/conan.cmake)
+conan_cmake_run(CONANFILE conanfile.txt BASIC_SETUP CMAKE_TARGETS BUILD missing)
 
 set(CMAKE_MODULE_PATH /usr/share/SFML/cmake/Modules)
 include(${CONAN_LIB_DIRS_CATCH2}/cmake/Catch2/Catch.cmake)
@@ -16,24 +22,23 @@ option(BUILD_SHARED_LIBS "Enable compilation of shared libraries" FALSE)
 option(ENABLE_CLANG_TIDY "Enable testing with clang-tidy" FALSE)
 option(ENABLE_CPPCHECK "Enable testing with cppcheck" FALSE)
 
-if (ENABLE_CPPCHECK)
+if(ENABLE_CPPCHECK)
   find_program(CPPCHECK cppcheck)
-  if (CPPCHECK)
+  if(CPPCHECK)
     set(CMAKE_CXX_CPPCHECK ${CPPCHECK} --suppress=syntaxError --enable=all --inconclusive)
-  else ()
+  else()
     message(SEND_ERROR "cppcheck requested but executable not found")
-  endif ()
-endif ()
-
-if (ENABLE_CLANG_TIDY)
-  find_program(CLANGTIDY clang-tidy)
-  if (CLANGTIDY)
-    set(CMAKE_CXX_CLANG_TIDY ${CLANGTIDY})
-  else ()
-    message(SEND_ERROR "clang-tidy requested but executable not found")
-  endif ()
+  endif()
 endif()
 
+if(ENABLE_CLANG_TIDY)
+  find_program(CLANGTIDY clang-tidy)
+  if(CLANGTIDY)
+    set(CMAKE_CXX_CLANG_TIDY ${CLANGTIDY})
+  else()
+    message(SEND_ERROR "clang-tidy requested but executable not found")
+  endif()
+endif()
 
 # Link this 'library' to use the standard warnings
 add_library(project_warnings INTERFACE)
@@ -97,11 +102,11 @@ else()
                                                   # bitwise were probably wanted
                                      -Wuseless-cast # warn if you perform a cast to the same type
                            )
+    target_link_libraries(project_options INTERFACE stdc++fs)
   else()
     if(LIBCPP)
       target_compile_options(project_options INTERFACE -stdlib=libc++)
     else()
-      target_link_libraries(project_options INTERFACE stdc++fs)
     endif()
 
   endif()
@@ -153,6 +158,3 @@ if(NOT ONLY_COVERAGE)
                                 CONAN_PKG::clara)
   target_include_directories(cpp_box SYSTEM PRIVATE external)
 endif()
-
-
-
