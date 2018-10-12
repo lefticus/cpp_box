@@ -128,6 +128,7 @@ if(NOT ONLY_COVERAGE)
                                 Threads::Threads
                                 CONAN_PKG::fmt
                                 CONAN_PKG::rang
-                                CONAN_PKG::libpng)
+                                CONAN_PKG::libpng
+                                CONAN_PKG::clara)
   target_include_directories(cpp_box SYSTEM PRIVATE external)
 endif()
