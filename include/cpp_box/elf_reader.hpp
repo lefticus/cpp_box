@@ -1,5 +1,4 @@
 #include <array>
-#include <cassert>
 #include <iostream>
 
 // TODO: make asserts into aborts if necessary?
@@ -637,7 +636,7 @@ struct File_Header
   };
 
 
-  constexpr explicit File_Header(std::basic_string_view<std::uint8_t> t_data) : data(t_data) { assert(data.size() >= 64); }
+  constexpr explicit File_Header(std::basic_string_view<std::uint8_t> t_data) : data(t_data) { runtime_assert(data.size() >= 64); }
 
   std::basic_string_view<std::uint8_t> data;
 
@@ -789,7 +788,7 @@ struct File_Header
 
   [[nodiscard]] constexpr auto section_header(const std::size_t entry) const noexcept -> Section_Header
   {
-    assert(entry < section_header_num_entries());
+    runtime_assert(entry < section_header_num_entries());
     return { bits_32(), little_endian(), data, data.substr(section_header_offset() + section_header_size() * entry) };
   }
 

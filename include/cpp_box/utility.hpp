@@ -9,6 +9,7 @@ namespace spdlog {
 class logger;
 }  // namespace spdlog
 
+
 namespace cpp_box::elf {
 struct File_Header;
 }  // namespace cpp_box::elf
@@ -16,6 +17,10 @@ struct File_Header;
 namespace cpp_box::utility {
 std::vector<uint8_t> read_file(const std::filesystem::path &t_path);
 
+
+inline void runtime_assert(bool condition) {
+  if (!condition) { abort(); }
+}
 
 void resolve_symbols(std::vector<std::uint8_t> &data, const cpp_box::elf::File_Header &file_header, spdlog::logger &logger);
 
