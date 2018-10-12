@@ -41,7 +41,7 @@ struct Box
     // TODO: Add interrupt vectors here
     //
     REGISTER_START = 0x00000000,
-    TOTAL_RAM      = REGISTER_START + 0x0000,
+    RAM_SIZE       = REGISTER_START + 0x0000,
     SCREEN_WIDTH   = REGISTER_START + 0x0004,  // 16bit screen width
     SCREEN_HEIGHT  = REGISTER_START + 0x0006,  // 16bit screen height
     SCREEN_BPP     = REGISTER_START + 0x0008,  // 8bit screen bits per pixel. Bits are divided evenly across the color space with preference given for
@@ -153,8 +153,9 @@ struct Box
 
   // TODO: Make this return stdout/stderr from system call
   // TODO: Put this in a reusable place
-  static void make_system_call(const std::string &str) {
-    std::system(str.c_str()); // NOLINT we need to make system calls to execute compiler
+  static void make_system_call(const std::string &str)
+  {
+    std::system(str.c_str());  // NOLINT we need to make system calls to execute compiler
   }
 
   // TODO: Make optimization level, standard, strongly typed things
@@ -382,9 +383,9 @@ struct Box
       m_logger.trace("reset()");
       sys = std::make_unique<decltype(sys)::element_type>(loaded_files.image, static_cast<std::uint32_t>(Memory_Map::USER_RAM_START));
       sys->setup_run(static_cast<std::uint32_t>(loaded_files.entry_point) + static_cast<std::uint32_t>(Memory_Map::USER_RAM_START));
-      assert(sys->SP() == STACK_START);
+      cpp_box::utility::runtime_assert(sys->SP() == STACK_START);
       m_logger.trace("setting up registers");
-      sys->write_word(static_cast<std::uint32_t>(Memory_Map::TOTAL_RAM), TOTAL_RAM);
+      sys->write_word(static_cast<std::uint32_t>(Memory_Map::RAM_SIZE), TOTAL_RAM);
       sys->write_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_WIDTH), 64);
       sys->write_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_HEIGHT), 64);
       sys->write_byte(static_cast<std::uint32_t>(Memory_Map::SCREEN_BPP), 32);

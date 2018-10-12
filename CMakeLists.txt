@@ -70,6 +70,7 @@ else()
 
   target_compile_options(project_warnings
                          INTERFACE -Wall
+                                   -Werror # treat all warnings as errors
                                    -Wextra # reasonable and standard
                                    -Wshadow # warn the user if a variable declaration shadows one
                                             # from a parent context
