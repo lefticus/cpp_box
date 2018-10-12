@@ -77,7 +77,6 @@ task:
   - sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git
   - pwd
   - clang++ --version
-  - clang-tidy --version
   - cmake --version
   - conan --version
   - export CXX=`which clang++`
@@ -101,7 +100,8 @@ task:
   - sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git clang-tools-7
   - pwd
   - clang++ --version
-  - clang-tidy-7 --version
+  - ls /usr/bin/clang*
+  - ls /usr/local/bin/clang*
   - cmake --version
   - conan --version
   - export CXX=`which clang++`
