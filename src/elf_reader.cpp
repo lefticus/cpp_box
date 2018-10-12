@@ -1,7 +1,7 @@
 #include "../include/cpp_box/elf_reader.hpp"
 #include <filesystem>
-#include <iostream>
 #include <fstream>
+#include <iostream>
 
 // todo: move to shared location
 auto read_file(const std::filesystem::path &filename)
@@ -21,14 +21,15 @@ auto read_file(const std::filesystem::path &filename)
 
 int main(const int argc, const char *const argv[])
 {
-  const std::filesystem::path exec_name{ argv[0] };
+  std::vector<std::string> args{ argv, std::next(argv, argc) };
+  const std::filesystem::path exec_name{ args.at(0) };
 
   if (argc != 2) {
     std::cerr << "usage: " << exec_name << " <filename>\n";
     return EXIT_FAILURE;
   }
 
-  const std::filesystem::path filename{ argv[1] };
+  const std::filesystem::path filename{ args.at(1) };
 
   const auto data = read_file(filename);
 
@@ -51,22 +52,20 @@ int main(const int argc, const char *const argv[])
   const auto string_table = file_header.string_table();
 
   for (const auto &header : file_header.section_headers()) {
-    std::cout << "  table name: " << header.name(sh_string_table) << " offset: " << header.offset() << " size: " << header.size() << " type: " << static_cast<int>(header.type())
-              << " num symbol entries: " << header.symbol_table_num_entries() << '\n';
+    std::cout << "  table name: " << header.name(sh_string_table) << " offset: " << header.offset() << " size: " << header.size()
+              << " type: " << static_cast<int>(header.type()) << " num symbol entries: " << header.symbol_table_num_entries() << '\n';
 
     for (const auto &symbol_table_entry : header.symbol_table_entries()) {
       std::cout << "    name_offset: " << symbol_table_entry.name_offset() << " symbol name: " << symbol_table_entry.name(string_table)
                 << " symbol offset: " << symbol_table_entry.value() << " table index: " << symbol_table_entry.section_header_table_index() << '\n';
-      if (symbol_table_entry.name(string_table) == "main") {
-        std::cout << "FOUND MAIN!\n";
-      }
+      if (symbol_table_entry.name(string_table) == "main") { std::cout << "FOUND MAIN!\n"; }
     }
 
     std::cout << "  relocation entries: " << header.relocation_table_num_entries() << '\n';
 
     for (const auto &relocation_table_entry : header.relocation_table_entries()) {
-      std::cout << "    file_offset: " << relocation_table_entry.file_offset() << " symbol: " << relocation_table_entry.symbol() << " symbol name: " << file_header.symbol_table().symbol_table_entry(relocation_table_entry.symbol()).name(string_table)  << '\n';
+      std::cout << "    file_offset: " << relocation_table_entry.file_offset() << " symbol: " << relocation_table_entry.symbol()
+                << " symbol name: " << file_header.symbol_table().symbol_table_entry(relocation_table_entry.symbol()).name(string_table) << '\n';
     }
-
   }
 }

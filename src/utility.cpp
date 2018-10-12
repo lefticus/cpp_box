@@ -1,9 +1,9 @@
-#include "../include/cpp_box/utility.hpp"
-#include "../include/cpp_box/elf_reader.hpp"
 #include "../include/cpp_box/arm.hpp"
+#include "../include/cpp_box/elf_reader.hpp"
+#include "../include/cpp_box/utility.hpp"
 
-#include <spdlog/spdlog.h>
 #include <fstream>
+#include <spdlog/spdlog.h>
 
 namespace cpp_box::utility {
 std::vector<uint8_t> read_file(const std::filesystem::path &t_path)

@@ -1,10 +1,10 @@
 #ifndef CPP_BOX_ARM_HPP
 #define CPP_BOX_ARM_HPP
 
-#include <array>
-#include <tuple>
 #include <algorithm>
+#include <array>
 #include <iterator>
+#include <tuple>
 #include <variant>
 
 namespace cpp_box::arm {
@@ -21,13 +21,13 @@ template<std::size_t Idx, typename F, typename V> constexpr decltype(auto) simpl
     if (Idx == t.index()) {
       return (f(std::get<Idx>(std::forward<V>(t))));
     } else {
-      return (simple_visit_impl<Idx + 1>(std::forward<F>(f), std::move(t)));
+      return (simple_visit_impl<Idx + 1>(std::forward<F>(f), std::forward<V>(t)));
     }
   }
 }
 
 // Variation of the naive way: only loops as many times as there are set bits.
-// TODO Move into shared utility location
+// TODO: Move into shared utility location
 template<typename T>[[nodiscard]] constexpr T popcnt(T v) noexcept
 {
   T c{ 0 };
@@ -41,7 +41,7 @@ template<typename F, typename V> constexpr decltype(auto) simple_visit(F &&f, V 
   return (simple_visit_impl<0>(std::forward<F>(f), std::forward<V>(t)));
 }
 
-// TODO Move into shared utility location
+// TODO: Move into shared utility location
 template<typename Value, typename Bit>[[nodiscard]] constexpr bool test_bit(const Value val, const Bit bit) noexcept
 {
   return val & (static_cast<Value>(1) << bit);
@@ -62,7 +62,7 @@ protected:
   std::uint32_t m_val;
 };
 
-enum class Condition {
+enum class Condition : std::uint32_t {
   EQ = 0b0000,  // Z set (equal)
   NE = 0b0001,  // Z clear (not equal)
   HS = 0b0010,  // C set (unsigned higher or same)
@@ -83,7 +83,7 @@ enum class Condition {
   NV = 0b1111   // Reserved
 };
 
-enum class OpCode {
+enum class OpCode : std::uint32_t {
   AND = 0b0000,  // Rd:= Op1 AND Op2
   EOR = 0b0001,  // Rd:= Op1 EOR Op2
   SUB = 0b0010,  // Rd:= Op1 - Op2
@@ -102,7 +102,7 @@ enum class OpCode {
   MVN = 0b1111   // Rd:= NOT Op2
 };
 
-enum class Shift_Type { Logical_Left = 0b00, Logical_Right = 0b01, Arithmetic_Right = 0b10, Rotate_Right = 0b11 };
+enum class Shift_Type : std::uint32_t { Logical_Left = 0b00, Logical_Right = 0b01, Arithmetic_Right = 0b10, Rotate_Right = 0b11 };
 
 
 struct Instruction : Strongly_Typed<std::uint32_t, Instruction>
@@ -252,7 +252,7 @@ struct Lookup_Table
 [[nodiscard]] constexpr auto get_lookup_table() noexcept
 {
   // hack for lack of constexpr std::bitset
-  // TODO use shared version
+  // TODO: use shared version
   constexpr const auto bitcount = [](const auto &table) {
     auto value = table.mask;
     int count  = 0;
@@ -331,9 +331,9 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
     std::uint32_t end{ 0 };
   };
 
-  static constexpr RAM_Type init_ram(const std::array<std::uint8_t, RAM_Size> &) { return RAM_Type{}; }
+  static constexpr RAM_Type init_ram(const std::array<std::uint8_t, RAM_Size> & /*unused*/) { return RAM_Type{}; }
 
-  template<typename T> static constexpr RAM_Type init_ram(const T &) { return RAM_Type(RAM_Size, 0); }
+  template<typename T> static constexpr RAM_Type init_ram(const T & /*unused*/) { return RAM_Type(RAM_Size, 0); }
 
 
   RAM_Type builtin_ram{ init_ram(builtin_ram) };  // just passing ourselves in to resolve the type
@@ -368,9 +368,9 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
       return nullptr;
     }();
 
-    if (data) {
-      const std::uint32_t byte_1 = data[0];
-      const std::uint32_t byte_2 = data[1];
+    if (data != nullptr) {
+      const std::uint32_t byte_1 = data[0];  // NOLINT
+      const std::uint32_t byte_2 = data[1];  // NOLINT
 
       return static_cast<std::uint16_t>(byte_1 | (byte_2 << 8));
     } else {
@@ -387,11 +387,11 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
       return nullptr;
     }();
 
-    if (data) {
-      const std::uint32_t byte_1 = data[0];
-      const std::uint32_t byte_2 = data[1];
-      const std::uint32_t byte_3 = data[2];
-      const std::uint32_t byte_4 = data[3];
+    if (data != nullptr) {
+      const std::uint32_t byte_1 = data[0];  // NOLINT
+      const std::uint32_t byte_2 = data[1];  // NOLINT
+      const std::uint32_t byte_3 = data[2];  // NOLINT
+      const std::uint32_t byte_4 = data[3];  // NOLINT
 
       return byte_1 | (byte_2 << 8) | (byte_3 << 16) | (byte_4 << 24);
     } else {
@@ -406,9 +406,9 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
       return nullptr;
     }();
 
-    if (data) {
-      data[0] = static_cast<std::uint8_t>(value & 0xFF);
-      data[1] = static_cast<std::uint8_t>((value >> 8) & 0xFF);
+    if (data != nullptr) {
+      data[0] = static_cast<std::uint8_t>(value & 0xFF);         // NOLINT
+      data[1] = static_cast<std::uint8_t>((value >> 8) & 0xFF);  // NOLINT
     } else {
       invalid_memory_write = true;
     }
@@ -421,36 +421,34 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
       return nullptr;
     }();
 
-    if (data) {
-      data[0] = static_cast<std::uint8_t>(value & 0xFF);
-      data[1] = static_cast<std::uint8_t>((value >> 8) & 0xFF);
-      data[2] = static_cast<std::uint8_t>((value >> 16) & 0xFF);
-      data[3] = static_cast<std::uint8_t>((value >> 24) & 0xFF);
+    if (data != nullptr) {
+      data[0] = static_cast<std::uint8_t>(value & 0xFF);          // NOLINT
+      data[1] = static_cast<std::uint8_t>((value >> 8) & 0xFF);   // NOLINT
+      data[2] = static_cast<std::uint8_t>((value >> 16) & 0xFF);  // NOLINT
+      data[3] = static_cast<std::uint8_t>((value >> 24) & 0xFF);  // NOLINT
     } else {
       invalid_memory_write = true;
     }
   }
 
+  constexpr System &operator=(System &&) noexcept = default;
+  ~System()                                       = default;
+  constexpr System(const System &)                = default;
+  constexpr System(System &&) noexcept            = default;
   constexpr System &operator=(const System &) = default;
   constexpr System()                          = default;
 
-  template<typename Container> constexpr System(const Container &memory) noexcept
+  template<typename Container> constexpr explicit System(const Container &memory, const std::uint32_t start_location = 0) noexcept
   {
-    for (std::size_t loc = 0; loc < memory.size(); ++loc) {
-      // cast is safe - we verified this statically assigned RAM was the right size
-      write_byte(static_cast<std::uint32_t>(loc), memory[loc]);
-    }
+    for (std::size_t loc = 0; loc < memory.size(); ++loc) { write_byte(static_cast<std::uint32_t>(loc + start_location), memory[loc]); }
     i_cache.fill_cache(*this);
   }
 
-  template<std::size_t Size> constexpr System(const std::array<std::uint8_t, Size> &memory) noexcept
+  template<std::size_t Size> constexpr explicit System(const std::array<std::uint8_t, Size> &memory, const std::uint32_t start_location = 0) noexcept
   {
     static_assert(Size <= RAM_Size);
 
-    for (std::size_t loc = 0; loc < Size; ++loc) {
-      // cast is safe - we verified this statically assigned RAM was the right size
-      write_byte(static_cast<std::uint32_t>(loc), memory[loc]);
-    }
+    for (std::size_t loc = 0; loc < Size; ++loc) { write_byte(static_cast<std::uint32_t>(loc + start_location), memory[loc]); }
 
     i_cache.fill_cache(*this);
   }
@@ -461,13 +459,13 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
   {
     // Set return from call register, so when 'main' returns,
     // we'll be at the end of local RAM
-    registers[14] = RAM_Size - 4;
-    PC()          = loc + 4;
-    SP()          = RAM_Size - 1;
+    LR() = RAM_Size - 4;
+    PC() = loc + 4;
+    SP() = RAM_Size - 1;
   }
 
   template<typename Tracer = void (*)(const System &, std::uint32_t, Instruction)>
-  constexpr void next_operation(Tracer &&tracer = [](const System &, const auto, const auto) {}) noexcept
+  constexpr void next_operation(Tracer &&tracer = [](const System & /*unused*/, const auto /*unused*/, const auto /*unused*/) {}) noexcept
   {
     const auto [ins, type] = i_cache.fetch(PC() - 4, *this);
     tracer(*this, PC() - 4, ins);
@@ -482,9 +480,13 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
     {
       Instruction instruction{ 0 };
       Instruction_Type type{};
+      // TODO check if these are necessary in current MSVC, which is why they were added
       constexpr Cache_Elem() noexcept                   = default;
       constexpr Cache_Elem(const Cache_Elem &) noexcept = default;
       constexpr Cache_Elem(Cache_Elem &&) noexcept      = default;
+      constexpr Cache_Elem &operator=(Cache_Elem &&) noexcept = default;
+      constexpr Cache_Elem &operator=(const Cache_Elem &) noexcept = default;
+      ~Cache_Elem()                                                = default;
     };
 
     constexpr I_Cache(const System &sys, const std::uint32_t t_start) noexcept : start(t_start), cache{} { fill_cache(sys); }
@@ -518,7 +520,8 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
   I_Cache i_cache{ *this, 0 };
 
   template<typename Tracer = void (*)(const System &, std::uint32_t, Instruction)>
-  constexpr void run(const std::uint32_t loc, Tracer &&tracer = [](const System &, const auto, const auto) {}) noexcept
+  constexpr void run(const std::uint32_t loc,
+                     Tracer &&tracer = [](const System & /*unused*/, const auto /*unused*/, const auto /*unused*/) {}) noexcept
   {
     setup_run(loc);
     while (operations_remaining()) { next_operation(tracer); }

@@ -2,7 +2,7 @@ language: cpp
 
 matrix:
   include:
-    - name: "gcc 7 Debug Coverage"
+    - name: "gcc 7 Debug Coverage (ONLY_COVERAGE)"
       os: linux
       sudo: false
       env: COVERAGE=1 CXX_EXE=/usr/bin/g++-7 CC_EXE=/usr/bin/gcc-7 GCOV=/usr/bin/gcov-7 CMAKE_OPTS="-DONLY_COVERAGE:BOOL=ON -DCMAKE_BUILD_TYPE:STRING=Debug"
@@ -16,10 +16,14 @@ matrix:
             - libudev-dev
             - g++-7
 
+
 install:
-  pip install --user conan
+  pip install --user conan cmake
 
 script:
+  - $CXX_EXE --version
+  - which cmake
+  - cmake --version
   - export CXX=$CXX_EXE
   - export CC=$CC_EXE
   - echo $CXX
@@ -28,7 +32,6 @@ script:
   - mkdir build
   - cd build
   - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
-  - conan install .. --build missing
   - cmake  $CMAKE_OPTS ..
   - VERBOSE=1 cmake --build . -- -j2
   - ctest -j2
