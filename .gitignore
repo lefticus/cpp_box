@@ -33,3 +33,6 @@
 *.exe
 *.out
 *.app
+
+# IDEA project files
+/.idea
