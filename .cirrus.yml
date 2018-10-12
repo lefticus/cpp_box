@@ -1,5 +1,5 @@
 task:
-  name: gcc8-Release
+  name: gcc8-Release-FullBuild
   container:
     image: lasote/conangcc8
   build_script:

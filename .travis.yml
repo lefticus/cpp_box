@@ -2,7 +2,7 @@ language: cpp
 
 matrix:
   include:
-    - name: "gcc 7 Debug Coverage"
+    - name: "gcc 7 Debug Coverage (ONLY_COVERAGE)"
       os: linux
       sudo: false
       env: COVERAGE=1 CXX_EXE=/usr/bin/g++-7 CC_EXE=/usr/bin/gcc-7 GCOV=/usr/bin/gcov-7 CMAKE_OPTS="-DONLY_COVERAGE:BOOL=ON -DCMAKE_BUILD_TYPE:STRING=Debug"
@@ -15,7 +15,7 @@ matrix:
             - libxrandr-dev
             - libudev-dev
             - g++-7
-    - name: "gcc 8 Debug"
+    - name: "gcc 8 Debug (ONLY_COVERAGE)"
       os: linux
       sudo: false
       env: CXX_EXE=/usr/bin/g++-8 CC_EXE=/usr/bin/gcc-8 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-DONLY_COVERAGE:BOOL=ON -DCMAKE_BUILD_TYPE:STRING=Debug"
@@ -28,7 +28,7 @@ matrix:
             - libxrandr-dev
             - libudev-dev
             - g++-8
-    - name: "clang 7 Debug"
+    - name: "clang 7 Debug (ONLY_COVERAGE libstdc++)"
       os: linux
       sudo: false
       env: CXX_EXE=/usr/bin/clang++-7 CC_EXE=/usr/bin/clang-7 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-DONLY_COVERAGE:BOOL=ON -DCMAKE_BUILD_TYPE:STRING=Debug"
@@ -45,6 +45,25 @@ matrix:
             - clang-tools-7
             - libc++-7-dev 
             - libc++abi-7-dev
+    - name: "clang 7 Debug (libc++)"
+      os: linux
+      sudo: false
+      env: CXX_EXE=/usr/bin/clang++-7 CC_EXE=/usr/bin/clang-7 GCOV=/usr/bin/gcov-8 CMAKE_OPTS="-DLIBCPP:BOOL=ON -DCMAKE_BUILD_TYPE:STRING=Debug"
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+            - llvm-toolchain-trusty-7
+          packages:
+            - libx11-dev
+            - libxrandr-dev
+            - libudev-dev
+            - clang-7
+            - clang-tools-7
+            - libc++-7-dev 
+            - libc++abi-7-dev
+
+
 
 
 
