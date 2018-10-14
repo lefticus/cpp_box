@@ -1,6 +1,8 @@
 #ifndef CPP_BOX_STATE_MACHINE_HPP
 #define CPP_BOX_STATE_MACHINE_HPP
 
+#include <type_traits>
+
 namespace cpp_box::state_machine {
 
 template<typename EnumType, typename Callable> struct StateTransition
@@ -27,18 +29,21 @@ template<typename EnumType, typename... Callables> struct StateMachine
 {
   std::tuple<StateTransition<EnumType, Callables>...> transitions;
 
-  constexpr StateMachine(StateTransition<EnumType, Callables>... t) : transitions(std::move(t)...) {}
+  explicit constexpr StateMachine(StateTransition<EnumType, Callables>... t) noexcept(std::is_nothrow_move_constructible_v<decltype(transitions)>)
+    : transitions(std::move(t)...)
+  {
+  }
 
   template<size_t Count, size_t Index, typename Transitions, typename... Param>
   constexpr static EnumType transition_impl(const EnumType current_state, Transitions &&transitions, Param &&... params)
   {
-    if constexpr (Index == Count) {
-      return current_state;
+    if (std::get<Index>(std::forward<Transitions>(transitions)).test(current_state, std::forward<Param>(params)...)) {
+      return std::get<Index>(std::forward<Transitions>(transitions)).to;
     } else {
-      if (std::get<Index>(std::forward<Transitions>(transitions)).test(current_state, std::forward<Param>(params)...)) {
-        return std::get<Index>(std::forward<Transitions>(transitions)).to;
-      } else {
+      if constexpr (Index + 1 < Count) {  // NOLINT broken clang tidy
         return transition_impl<Count, Index + 1>(current_state, std::forward<Transitions>(transitions), std::forward<Param>(params)...);
+      } else { // NOLINT broken clang tidy
+        return current_state;
       }
     }
   }

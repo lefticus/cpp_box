@@ -1,12 +1,15 @@
-cmake_minimum_required(VERSION 3.2)
+cmake_minimum_required(VERSION 3.10)
+project(TheCppBox VERSION 0.0.1 LANGUAGES CXX)
 
-include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
-conan_basic_setup(TARGETS)
+find_program(CCACHE ccache)
+if(CCACHE)
+  set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE})
+endif()
 
-set(CMAKE_MODULE_PATH /usr/share/SFML/cmake/Modules)
-include(${CONAN_LIB_DIRS_CATCH2}/cmake/Catch2/Catch.cmake)
 
-option(BUILD_SHARED_LIBS "Enable compilation of shared libraries" FALSE)
+##
+## Set compiler flags before running conan
+##
 
 # Link this 'library' to use the standard warnings
 add_library(project_warnings INTERFACE)
@@ -18,7 +21,7 @@ target_compile_features(project_options INTERFACE cxx_std_17)
 target_include_directories(project_options INTERFACE include external)
 
 if(MSVC)
-  target_compile_options(project_warnings INTERFACE /W4)
+  target_compile_options(project_warnings INTERFACE /W4 /WX "/permissive-")
 else()
   option(ONLY_COVERAGE "Build only tests necessary for coverage" FALSE)
   option(LIBCPP "Build with libc++" FALSE)
@@ -38,6 +41,7 @@ else()
 
   target_compile_options(project_warnings
                          INTERFACE -Wall
+                                   -Werror # treat all warnings as errors
                                    -Wextra # reasonable and standard
                                    -Wshadow # warn the user if a variable declaration shadows one
                                             # from a parent context
@@ -59,7 +63,6 @@ else()
                          )
 
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    target_link_libraries(project_options INTERFACE stdc++fs)
     target_compile_options(project_warnings
                            INTERFACE -Wmisleading-indentation # warn if identation implies blocks
                                                               # where blocks do not exist
@@ -71,19 +74,76 @@ else()
                                                   # bitwise were probably wanted
                                      -Wuseless-cast # warn if you perform a cast to the same type
                            )
+    target_link_libraries(project_options INTERFACE stdc++fs)
   else()
     if(LIBCPP)
       target_compile_options(project_options INTERFACE -stdlib=libc++)
+    else()
+      target_link_libraries(project_options INTERFACE stdc++fs)
     endif()
 
   endif()
 endif()
 
+##
+## Load Conan
+##
+
+if(NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
+  message(STATUS "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")
+  file(DOWNLOAD "https://raw.githubusercontent.com/conan-io/cmake-conan/v0.12/conan.cmake"
+                "${CMAKE_BINARY_DIR}/conan.cmake")
+endif()
+
+
+include(${CMAKE_BINARY_DIR}/conan.cmake)
+conan_check(REQUIRED)
+conan_cmake_run(CONANFILE conanfile.txt BASIC_SETUP CONAN_COMMAND ${CONAN_CMD} CMAKE_TARGETS BUILD missing)
+set(CMAKE_MODULE_PATH /usr/share/SFML/cmake/Modules)
+
+if (CONAN_CATCH2_ROOT_DEBUG)
+  include(${CONAN_CATCH2_ROOT_DEBUG}/lib/cmake/Catch2/Catch.cmake)
+else ()
+  include(${CONAN_CATCH2_ROOT}/lib/cmake/Catch2/Catch.cmake)
+endif ()
+
+
+##
+## Options
+##
+
+option(BUILD_SHARED_LIBS "Enable compilation of shared libraries" FALSE)
+option(ENABLE_CLANG_TIDY "Enable testing with clang-tidy" FALSE)
+option(ENABLE_CPPCHECK "Enable testing with cppcheck" FALSE)
+
+if(ENABLE_CPPCHECK)
+  find_program(CPPCHECK cppcheck)
+  if(CPPCHECK)
+    set(CMAKE_CXX_CPPCHECK ${CPPCHECK} --suppress=syntaxError --enable=all --inconclusive)
+  else()
+    message(SEND_ERROR "cppcheck requested but executable not found")
+  endif()
+endif()
+
+if(ENABLE_CLANG_TIDY)
+  find_program(CLANGTIDY clang-tidy)
+  if(CLANGTIDY)
+    set(CMAKE_CXX_CLANG_TIDY ${CLANGTIDY})
+  else()
+    message(SEND_ERROR "clang-tidy requested but executable not found")
+  endif()
+endif()
+
+
+##
+## Project Setup
+##
+
 enable_testing()
 
 add_executable(constexpr_tests test/constexpr_tests.cpp)
 target_link_libraries(constexpr_tests PRIVATE project_options project_warnings CONAN_PKG::catch2)
-# catch_discover_tests(constexpr_tests TEST_PREFIX "constexpr.")
+catch_discover_tests(constexpr_tests TEST_PREFIX "constexpr.")
 
 add_executable(relaxed_constexpr_tests test/constexpr_tests.cpp)
 target_link_libraries(relaxed_constexpr_tests
@@ -103,14 +163,7 @@ if(NOT ONLY_COVERAGE)
   set(OpenGL_GL_PREFERENCE GLVND)
   find_package(OpenGL)
 
-  # imgui + sfml built as a lib, intentionally not using full warning flags
-  add_library(imgui
-              external/imgui/lib/imgui.cpp
-              external/imgui/lib/imgui_draw.cpp
-              external/imgui/lib/imgui-SFML.cpp)
-  target_link_libraries(imgui
-                        PUBLIC CONAN_PKG::sfml
-                               OpenGL::GL)
+  add_subdirectory(external)
 
   add_library(utility src/utility.cpp)
   target_link_libraries(utility PRIVATE project_options project_warnings PUBLIC CONAN_PKG::spdlog)
@@ -128,6 +181,7 @@ if(NOT ONLY_COVERAGE)
                                 Threads::Threads
                                 CONAN_PKG::fmt
                                 CONAN_PKG::rang
-                                CONAN_PKG::libpng)
+                                CONAN_PKG::libpng
+                                CONAN_PKG::clara)
   target_include_directories(cpp_box SYSTEM PRIVATE external)
 endif()

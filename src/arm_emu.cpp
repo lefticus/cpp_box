@@ -1,9 +1,9 @@
 #include "cpp_box/arm.hpp"
+#include <fstream>
+#include <iomanip>
+#include <iostream>
 #include <string>
 #include <vector>
-#include <fstream>
-#include <iostream>
-#include <iomanip>
 
 #include "rang.hpp"
 
@@ -54,16 +54,16 @@ int main(const int argc, const char *argv[])
     std::cerr << "Attempting to load file: " << args[1] << '\n';
 
     auto RAM = [&]() {
-      if (std::ifstream ifs{ args[1], std::ios::binary }; ifs.good()) {
+      if (std::ifstream ifs{ args.at(1), std::ios::binary }; ifs.good()) {
         const auto file_size = ifs.seekg(0, std::ios_base::end).tellg();
         ifs.seekg(0);
         std::vector<char> data;
         data.resize(static_cast<std::size_t>(file_size));
         ifs.read(data.data(), file_size);
-        std::cerr << "Loaded file: '" << args[1] << "' of size: " << file_size << '\n';
+        std::cerr << "Loaded file: '" << args.at(1) << "' of size: " << file_size << '\n';
         return std::vector<uint8_t>{ begin(data), end(data) };
       } else {
-        std::cerr << "Error opening file: " << argv[1] << '\n';
+        std::cerr << "Error opening file: " << args.at(1) << '\n';
         exit(EXIT_FAILURE);
       }
     }();
@@ -73,9 +73,8 @@ int main(const int argc, const char *argv[])
 
     auto last_registers = sys.registers;
     int opcount         = 0;
-    const auto tracer   = [&opcount]([[maybe_unused]] const auto &t_sys, [[maybe_unused]] const auto t_pc, [[maybe_unused]] const auto t_ins) {
-      ++opcount;
-    };
+    const auto tracer =
+      [&opcount]([[maybe_unused]] const auto & /*t_sys*/, [[maybe_unused]] const auto /*t_pc*/, [[maybe_unused]] const auto /*t_ins*/) { ++opcount; };
 
     sys.run(0x00000000, tracer);
 

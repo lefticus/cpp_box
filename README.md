@@ -1,8 +1,10 @@
-[![Build Status](https://travis-ci.org/lefticus/cpp_box.svg?branch=master)](https://travis-ci.org/lefticus/cpp_box)
-[![codecov](https://codecov.io/gh/lefticus/cpp_box/branch/master/graph/badge.svg)](https://codecov.io/gh/lefticus/cpp_box)
-[![CircleCI master](https://img.shields.io/circleci/project/github/lefticus/cpp_box/master.svg)](https://circleci.com/gh/lefticus/cpp_box)
-[![CodeFactor](https://www.codefactor.io/repository/github/lefticus/cpp_box/badge)](https://www.codefactor.io/repository/github/lefticus/cpp_box)
-
+|      |  |
+|------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
+| travis     | [![Travis Build Status](https://travis-ci.org/lefticus/cpp_box.svg?branch=master)](https://travis-ci.org/lefticus/cpp_box)                               |
+| Cirrus CI  | [![Cirrus CI Build Status](https://api.cirrus-ci.com/github/lefticus/cpp_box.svg)](https://cirrus-ci.com/github/lefticus/cpp_box)                        |
+| Appveyor   | ![AppVeyor Build status](https://img.shields.io/appveyor/ci/lefticus/cpp-box.svg)                                                                              |
+| Codecov    | [![codecov](https://codecov.io/gh/lefticus/cpp_box/branch/master/graph/badge.svg)](https://codecov.io/gh/lefticus/cpp_box)                        |
+| CodeFactor | [![CodeFactor](https://www.codefactor.io/repository/github/lefticus/cpp_box/badge)](https://www.codefactor.io/repository/github/lefticus/cpp_box) |
 # cpp_box
 
 It implements a partial ARMv4 architecture in software.
@@ -48,18 +50,21 @@ Then in the project directory:
 mkdir build && cd build
 ```
 
-Let the Conan cache all the necessary packages by using this command:
+Conan support is built into the CMakeLists.txt file. You must have conan installed already and need to add appropriate remote:
 
 ```
-conan install ..
+conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan
 ```
 
-This command will read the `conanfile.txt` and install the required packages.
-
-After successfully passing all the steps, issue the `cmake` command to build the project automagically.
 
 ```
 cmake ..
+```
+
+If cmake cannot find the version of conan you have installed you can tell it where to find it with:
+
+```
+cmake .. -DCONAN_CMD:PATH=/path/to/conan
 ```
 
 ## Running the tests

@@ -6,15 +6,15 @@ build_script:
     mkdir build
 
     cd build
-    
+
     pip install --user conan
 
-    C:\Users\appveyor\AppData\Roaming\Python\Scripts\conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
+    set PATH=%PATH%;C:\Users\appveyor\AppData\Roaming\Python\Scripts
 
-    C:\Users\appveyor\AppData\Roaming\Python\Scripts\conan install .. --build missing
+    conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
 
-    cmake c:\projects\source -G "Visual Studio 15 2017 Win64"
-    
+    cmake c:\projects\source -G "Visual Studio 15 2017 Win64" -DCMAKE_BUILD_TYPE:STRING=Release
+
     cmake --build . --config "Release"
 
 test_script:
