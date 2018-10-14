@@ -340,17 +340,18 @@ TEST_CASE("Test memory instructions - Immediate value")
 
   REQUIRE(TEST(system.registers[0] == 0x16));
   REQUIRE(TEST(system.registers[1] == 0x16));
-  //TODO REQUIRE(TEST(system.registers[2] == [[16]+2]));
+  // TODO REQUIRE(TEST(system.registers[2] == [[16]+2]));
 }
-
+/*
 TEST_CASE("Test memory instructions - Register")
 {
-  CONSTEXPR auto systest = run_instruction(cpp_box::arm::Instruction{ 0xe7812002 }  // str r2, [r1, r2]  address mode: offset
-                                           // cpp_box::arm::Instruction{ 0x },  // str r2, [ r1, r2 ]! address mode: pre-indexed.
-                                           // TODO instruction not supported
-                                           // cpp_box::arm::Instruction{ 0xe },  // ldr r3, [r1], r2  address mode: post-indexed.
-                                           // TODO instruction not supported
-  );
+  CONSTEXPR auto systest =
+    run_instruction(cpp_box::arm::Instruction{ 0xe7812002 }  // str r2, [r1, r2]  address mode: offset
+                                                             // cpp_box::arm::Instruction{ 0x },  // str r2, [ r1, r2 ]! address mode: pre-indexed.
+                                                             // TODO instruction not supported
+                                                             // cpp_box::arm::Instruction{ 0xe },  // ldr r3, [r1], r2  address mode: post-indexed.
+                                                             // TODO instruction not supported
+    );
 
   // TODO  REQUIRE(TEST());
 }
@@ -358,8 +359,9 @@ TEST_CASE("Test memory instructions - Register")
 TEST_CASE("Test memory instructions - Scaled register")
 {
   CONSTEXPR auto systest = run_instruction(cpp_box::arm::Instruction{ 0xe7913102 }  // ldr   r3, [r1, r2, LSL#2]  address mode: offset
-                                           );
+  );
 
   // TODO  REQUIRE(TEST());
 }
+*/
 #endif
