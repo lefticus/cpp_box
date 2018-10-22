@@ -1,0 +1,6 @@
+extraction:
+  cpp:
+    after_prepare:    # Customizable step used by all languages.
+      - pip install cmake conan
+      - conan --version
+      - cmake --version
