@@ -4,6 +4,8 @@ extraction:
       packages:
         - python-pip
     after_prepare:    # Customizable step used by all languages.
-      - pip3 install cmake conan
+      - pip3 install --local cmake conan
+      - ls ~/.local/bin
+      - export PATH=$PATH:~/.local/bin
       - conan --version
       - cmake --version
