@@ -638,7 +638,7 @@ struct Box
       text(true, "{}", goal.name);
       text(true, "{}", goal.description);
       for (std::size_t clue = 0; clue < goal.hints.size(); ++clue) {
-        if (ImGui::CollapsingHeader("%s", fmt::format("Show Hint #{}", clue).c_str())) { text(true, "{}", goal.hints[clue]); }
+        if (ImGui::CollapsingHeader(fmt::format("Show Hint #{}", clue).c_str())) { text(true, "{}", goal.hints[clue]); }
       }
     }
     ImGui::End();
