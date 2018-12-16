@@ -28,7 +28,7 @@ void resolve_symbols(std::vector<std::uint8_t> &data, const cpp_box::elf::File_H
 // creates an RAII managed temporary directory
 struct Temp_Directory
 {
-  explicit Temp_Directory(const std::string_view t_prefix);
+  explicit Temp_Directory(const std::string_view t_prefix = "arm_thing");
   ~Temp_Directory();
 
   const std::filesystem::path &dir() { return m_dir; }

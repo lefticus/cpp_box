@@ -34,6 +34,33 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
+
+// TODO: Make this return stdout/stderr from system call
+// TODO: Put this in a reusable place
+[[nodiscard]] static std::tuple<int, std::string, std::string> make_system_call(const std::string &command)
+{
+  cpp_box::utility::Temp_Directory dir{};
+
+  const auto stdout_path{dir.dir() / "stdout"};
+  const auto stderr_path{dir.dir() / "stderr"};
+
+  const auto quote_command = [](const std::string &str, const std::filesystem::path &out, const std::filesystem::path &err) {
+#if defined(_MSC_VER)
+    return fmt::format(R"("{}" 1>"{}" 2>"{}")", str, out.string(), err.string());
+#else
+    return fmt::format(R"({} 1>"{}" 2>"{}")", str, out.string(), err.string());
+#endif
+  };
+
+
+  const auto result = std::system(quote_command(command, stdout_path, stderr_path).c_str());  // NOLINT we need to make system calls to execute clang_compiler
+  const auto out = cpp_box::utility::read_file(stdout_path);
+  const auto err = cpp_box::utility::read_file(stderr_path);
+
+  return {result, std::string{out.begin(), out.end()}, std::string{err.begin(), err.begin()}};
+}
+
+
 struct Box
 {
 
@@ -152,23 +179,16 @@ struct Box
     return { std::string{ data->begin(), data->end() }, "", {}, {}, {}, false, {}, {} };
   }
 
-  // TODO: Make this return stdout/stderr from system call
-  // TODO: Put this in a reusable place
-  static void make_system_call(const std::string &str)
-  {
-    [[maybe_unused]] const auto result = std::system(str.c_str());  // NOLINT we need to make system calls to execute compiler
-  }
-
   // TODO: Make optimization level, standard, strongly typed things
   static Loaded_Files compile(const std::string &t_str,
-                              const std::filesystem::path &t_compiler,
+                              const std::filesystem::path &t_clang_compiler,
                               const std::string_view t_optimization_level,
                               const std::string_view t_standard,
                               spdlog::logger &logger)
   {
     logger.info("Compile Starting");
 
-    cpp_box::utility::Temp_Directory dir("ARM_THING");
+    cpp_box::utility::Temp_Directory dir{};
 
     logger.debug("Using dir: '{}'", dir.dir().string());
     const auto cpp_file         = dir.dir() / "src.cpp";
@@ -181,34 +201,26 @@ struct Box
       ofs.flush();  // make sure OS flushes file before clang tries to load it
     }
 
-    const auto quote_command = [](const std::string &str) {
-#if defined(_MSC_VER)
-      return '"' + str + '"';
-#else
-      return str;
-#endif
-    };
-
-    const auto build_command = quote_command(fmt::format(
+    const auto build_command = fmt::format(
       R"("{}" -std={} "{}" -c -o "{}" -O{} -g -save-temps=obj --target=arm-none-elf -march=armv4 -mfpu=vfp -mfloat-abi=hard -nostdinc -D__ELF__ -D_LIBCPP_HAS_NO_THREADS)",
-      t_compiler.string(),
+      t_clang_compiler.string(),
       std::string(t_standard),
       cpp_file.string(),
       obj_file.string(),
-      std::string(t_optimization_level)));
+      std::string(t_optimization_level));
 
     logger.debug("Executing compile command: '{}'", build_command);
-    make_system_call(build_command);
+    [[maybe_unused]] const auto [result, output, error] = make_system_call(build_command);
     const auto assembly = cpp_box::utility::read_file(asm_file);
     auto loaded         = load_unknown(obj_file, logger);
 
 
-    const auto disassemble_command = quote_command(fmt::format(R"("{}" -disassemble -demangle -line-numbers -full-leading-addr -source "{}" > "{}")",
-                                                               (t_compiler.parent_path() / "llvm-objdump").string(),
+    const auto disassemble_command = fmt::format(R"("{}" -disassemble -demangle -line-numbers -full-leading-addr -source "{}" > "{}")",
+                                                               (t_clang_compiler.parent_path() / "llvm-objdump").string(),
                                                                obj_file.string(),
-                                                               disassembly_file.string()));
+                                                               disassembly_file.string());
     logger.debug("Executing disassemble command: '{}'", disassemble_command);
-    make_system_call(disassemble_command);
+    [[maybe_unused]] const auto disassembly_output = make_system_call(disassemble_command);
 
 
     const std::regex strip_attributes{ R"(\n\s+\..*)", std::regex::ECMAScript };
@@ -369,6 +381,7 @@ struct Box
                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Parse_Build_Results, s_build_ready },
                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Step_One, s_step_pressed },
                                             cpp_box::state_machine::StateTransition{ States::Paused, States::Begin_Build, s_can_start_build },
+                                            cpp_box::state_machine::StateTransition{ States::Paused, States::Running, s_running },
                                             cpp_box::state_machine::StateTransition{ States::Parse_Build_Results, States::Reset, s_always_true },
                                             cpp_box::state_machine::StateTransition{ States::Step_One, States::Step_One, s_step_pressed },
                                             cpp_box::state_machine::StateTransition{ States::Step_One, States::Check_Goal, s_goal_check_needed },
@@ -721,13 +734,9 @@ struct Box
         status.update_display();
         break;
       case Status::States::Begin_Build:
-        status.future_build = std::async(std::launch::async, [console = this->console, src = status.loaded_files.src, compiler = this->compiler]() {
-        // string is oversized to allow for a buffer for IMGUI, need to only compile the first part of it
-#if defined(_MSC_VER)
-          return compile(src.substr(0, src.find('\0')), compiler, "3", "c++2a", *console);
-#else
-          return compile(src.substr(0, src.find('\0')), compiler, "3", "c++2a", *console);
-#endif
+        status.future_build = std::async(std::launch::async, [console = this->console, src = status.loaded_files.src, clang_compiler = this->clang_compiler]() {
+          // string is oversized to allow for a buffer for IMGUI, need to only compile the first part of it
+          return compile(src.substr(0, src.find('\0')), clang_compiler, "3", "c++2a", *console);
         });
         status.needs_build = false;
         break;
@@ -783,10 +792,11 @@ struct Box
 
   std::shared_ptr<spdlog::logger> console{ spdlog::stdout_color_mt("console") };
 
-  std::filesystem::path compiler{};
+  std::filesystem::path clang_compiler{};
 
-  explicit Box(std::filesystem::path t_compiler) : compiler(std::move(t_compiler)) {}
+  explicit Box(std::filesystem::path t_clang_compiler) : clang_compiler(std::move(t_clang_compiler)) {}
 };
+
 
 
 int main(const int argc, const char *argv[])
@@ -797,26 +807,47 @@ int main(const int argc, const char *argv[])
   using clara::Help;
   bool showHelp{ false };
   std::filesystem::path initialFile;
-#if defined(_MSC_VER)
-  std::filesystem::path compiler(R"(C:\Program Files\LLVM\bin\clang++)");
-#else
-  std::filesystem::path compiler("/usr/local/bin/clang++");
-#endif
-  auto cli = Help(showHelp) | Opt(compiler, "path")["--compiler"]("compile C++ with <compiler>")
+
+  const auto find_clang = [](const auto ... location) {
+    for (const auto &p : std::initializer_list<std::filesystem::path>{location ...})
+    {
+      if (std::error_code ec{}; std::filesystem::is_regular_file(p, ec)) {
+        if (const auto [result, out, err] = make_system_call(fmt::format("{} --version", p.string()));
+            out.find("clang") != std::string::npos) {
+          std::cerr << "Found clang: " << out.substr(0, out.find("\n"));
+          return p;
+        }
+      }
+    }
+
+    return std::filesystem::path{};
+  };
+
+  std::filesystem::path user_provided_clang;
+  auto cli = Help(showHelp) | Opt(user_provided_clang, "path")["--clang_compiler"]("compile C++ with <clang_compiler>")
              | Arg(initialFile, "file")("load <file> as an initial program");
 
   auto result = cli.parse(Args(argc, argv));
   if (!result) {
     std::cerr << "Error in command line: " << result.errorMessage() << '\n';
-    return 1;
+    return EXIT_FAILURE;
   }
 
   if (showHelp) {
     std::cout << cli << '\n';
-    return 0;
+    return EXIT_SUCCESS;
   }
 
-  Box box(compiler);
+  const auto clang_compiler = find_clang(user_provided_clang, R"(C:\Program Files\LLVM\bin\clang++)", "/usr/local/bin/clang++", "/usr/bin/clang++");
+
+  if (clang_compiler.empty()) {
+    std::cerr << "Unable to locate a viable clang compiler\n";
+    return EXIT_FAILURE;
+  } else {
+    std::cout << "Using compiler: '" << clang_compiler << "'\n";
+  }
+
+  Box box(clang_compiler);
 
   box.event_loop(initialFile);
 }
