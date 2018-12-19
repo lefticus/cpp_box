@@ -80,7 +80,8 @@ Temp_Directory::Temp_Directory(const std::string_view t_prefix)
 {
 
   for (int count = 0; count < 1000; ++count) {
-    const auto p = std::filesystem::temp_directory_path() / fmt::format("{}-{}-{:04x}", t_prefix, std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()), count);
+    const auto p = std::filesystem::temp_directory_path()
+                   / fmt::format("{}-{}-{:04x}", t_prefix, std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()), count);
     if (std::filesystem::create_directories(p)) {
       m_dir = p;
       return;
@@ -94,4 +95,4 @@ Temp_Directory::~Temp_Directory()
   std::filesystem::remove_all(m_dir);
 }
 
-}  // namespace cpp_box
+}  // namespace cpp_box::utility

@@ -41,8 +41,8 @@
 {
   cpp_box::utility::Temp_Directory dir{};
 
-  const auto stdout_path{dir.dir() / "stdout"};
-  const auto stderr_path{dir.dir() / "stderr"};
+  const auto stdout_path{ dir.dir() / "stdout" };
+  const auto stderr_path{ dir.dir() / "stderr" };
 
   const auto quote_command = [](const std::string &str, const std::filesystem::path &out, const std::filesystem::path &err) {
 #if defined(_MSC_VER)
@@ -53,11 +53,12 @@
   };
 
 
-  const auto result = std::system(quote_command(command, stdout_path, stderr_path).c_str());  // NOLINT we need to make system calls to execute clang_compiler
+  const auto result =
+    std::system(quote_command(command, stdout_path, stderr_path).c_str());  // NOLINT we need to make system calls to execute clang_compiler
   const auto out = cpp_box::utility::read_file(stdout_path);
   const auto err = cpp_box::utility::read_file(stderr_path);
 
-  return {result, std::string{out.begin(), out.end()}, std::string{err.begin(), err.begin()}};
+  return { result, std::string{ out.begin(), out.end() }, std::string{ err.begin(), err.begin() } };
 }
 
 
@@ -132,6 +133,7 @@ struct Box
     bool good_binary{ false };
     std::unordered_map<std::uint32_t, Memory_Location> location_data;
     std::map<std::string, std::uint64_t> section_offsets;
+    std::string compiler_output;
   };
 
 
@@ -166,7 +168,7 @@ struct Box
               const auto main_file_offset = static_cast<std::uint32_t>(main_section.offset() + symbol_table_entry.value());
               logger.info(
                 "'main' symbol found in '{}':{} file offset: {}", main_section.name(sh_string_table), symbol_table_entry.value(), main_file_offset);
-              return Loaded_Files{ "", "", std::move(data), data_view, main_file_offset, true, {}, section_offsets };
+              return Loaded_Files{ "", "", std::move(data), data_view, main_file_offset, true, {}, section_offsets, {} };
             }
           }
         }
@@ -176,7 +178,7 @@ struct Box
     // if we make it here it's not an elf file or doesn't have main, assuming a src file
     logger.info("Didn't find a main, assuming C++ src file");
 
-    return { std::string{ data->begin(), data->end() }, "", {}, {}, {}, false, {}, {} };
+    return { std::string{ data->begin(), data->end() }, "", {}, {}, {}, false, {}, {}, {} };
   }
 
   // TODO: Make optimization level, standard, strongly typed things
@@ -210,15 +212,19 @@ struct Box
       std::string(t_optimization_level));
 
     logger.debug("Executing compile command: '{}'", build_command);
-    [[maybe_unused]] const auto [result, output, error] = make_system_call(build_command);
+    const auto [result, output, error] = make_system_call(build_command);
+
+    logger.trace("stdout results from compile: {}", output);
+    logger.trace("stderr results from compile: {}", error);
+
     const auto assembly = cpp_box::utility::read_file(asm_file);
     auto loaded         = load_unknown(obj_file, logger);
 
 
     const auto disassemble_command = fmt::format(R"("{}" -disassemble -demangle -line-numbers -full-leading-addr -source "{}" > "{}")",
-                                                               (t_clang_compiler.parent_path() / "llvm-objdump").string(),
-                                                               obj_file.string(),
-                                                               disassembly_file.string());
+                                                 (t_clang_compiler.parent_path() / "llvm-objdump").string(),
+                                                 obj_file.string(),
+                                                 disassembly_file.string());
     logger.debug("Executing disassemble command: '{}'", disassemble_command);
     [[maybe_unused]] const auto disassembly_output = make_system_call(disassemble_command);
 
@@ -293,7 +299,8 @@ struct Box
                          static_cast<std::uint32_t>(loaded.entry_point),
                          loaded.good_binary,
                          parse_disassembly(std::string(disassembly.begin(), disassembly.end()), loaded.section_offsets),
-                         loaded.section_offsets };
+                         loaded.section_offsets,
+                         error };
   }
 
   struct Inputs
@@ -490,9 +497,9 @@ struct Box
   template<typename StringType, typename... Params> void text(const bool enabled, const StringType &format_str, Params &&... params)
   {
     if (!enabled) { ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]); }
-    const auto s = fmt::format(static_cast<const char *>(format_str), std::forward<Params>(params)...);
+    const auto s     = fmt::format(static_cast<const char *>(format_str), std::forward<Params>(params)...);
     const auto begin = s.c_str();
-    const auto end = begin + s.size(); // NOLINT, this is save ptr arithmetic and std::next requires a signed type :P
+    const auto end   = begin + s.size();  // NOLINT, this is safe ptr arithmetic and std::next requires a signed type :P
     ImGui::TextUnformatted(begin, end);
     if (!enabled) { ImGui::PopStyleColor(); }
   }
@@ -635,6 +642,15 @@ struct Box
         }
         ImGui::EndChild();
       }
+      if (ImGui::CollapsingHeader("Compiler Output")) {
+        ImGui::BeginChild("Compiler Output", { ImGui::GetContentRegionAvailWidth(), 300 });
+        ImGui::InputTextMultiline("",
+                                  status.loaded_files.compiler_output.data(),
+                                  status.loaded_files.compiler_output.size(),
+                                  ImGui::GetContentRegionAvail(),
+                                  ImGuiInputTextFlags_ReadOnly);
+        ImGui::EndChild();
+      }
     }
     ImGui::End();
 
@@ -734,10 +750,11 @@ struct Box
         status.update_display();
         break;
       case Status::States::Begin_Build:
-        status.future_build = std::async(std::launch::async, [console = this->console, src = status.loaded_files.src, clang_compiler = this->clang_compiler]() {
-          // string is oversized to allow for a buffer for IMGUI, need to only compile the first part of it
-          return compile(src.substr(0, src.find('\0')), clang_compiler, "3", "c++2a", *console);
-        });
+        status.future_build =
+          std::async(std::launch::async, [console = this->console, src = status.loaded_files.src, clang_compiler = this->clang_compiler]() {
+            // string is oversized to allow for a buffer for IMGUI, need to only compile the first part of it
+            return compile(src.substr(0, src.find('\0')), clang_compiler, "3", "c++2a", *console);
+          });
         status.needs_build = false;
         break;
       case Status::States::Parse_Build_Results:
@@ -798,7 +815,6 @@ struct Box
 };
 
 
-
 int main(const int argc, const char *argv[])
 {
   using clara::Opt;
@@ -808,12 +824,10 @@ int main(const int argc, const char *argv[])
   bool showHelp{ false };
   std::filesystem::path initialFile;
 
-  const auto find_clang = [](const auto ... location) {
-    for (const auto &p : std::initializer_list<std::filesystem::path>{location ...})
-    {
+  const auto find_clang = [](const auto... location) {
+    for (const auto &p : std::initializer_list<std::filesystem::path>{ location... }) {
       if (std::error_code ec{}; std::filesystem::is_regular_file(p, ec)) {
-        if (const auto [result, out, err] = make_system_call(fmt::format("{} --version", p.string()));
-            out.find("clang") != std::string::npos) {
+        if (const auto [result, out, err] = make_system_call(fmt::format("{} --version", p.string())); out.find("clang") != std::string::npos) {
           std::cerr << "Found clang: " << out.substr(0, out.find("\n"));
           return p;
         }
