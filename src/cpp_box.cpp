@@ -46,17 +46,20 @@
 
   const auto quote_command = [](const std::string &str, const std::filesystem::path &out, const std::filesystem::path &err) {
 #if defined(_MSC_VER)
-    return fmt::format(R"("{}" 1>"{}" 2>"{}")", str, out.string(), err.string());
+    return fmt::format(R"("{}" >"{}" 2>"{}")", str, out.string(), err.string());
 #else
-    return fmt::format(R"({} 1>"{}" 2>"{}")", str, out.string(), err.string());
+    return fmt::format(R"({} >{} 2>{})", str, out.string(), err.string());
 #endif
   };
 
+  const auto quoted_command = quote_command(command, stdout_path, stderr_path);
+  std::cout << "Command: '" << quoted_command << "'\n";
+  const auto result = std::system(quoted_command.c_str());  // NOLINT we need to make system calls to execute clang_compiler
 
-  const auto result =
-    std::system(quote_command(command, stdout_path, stderr_path).c_str());  // NOLINT we need to make system calls to execute clang_compiler
-  const auto out = cpp_box::utility::read_file(stdout_path);
-  const auto err = cpp_box::utility::read_file(stderr_path);
+  const auto out    = cpp_box::utility::read_file(stdout_path);
+  const auto err    = cpp_box::utility::read_file(stderr_path);
+
+  std::cout << "reading files: " << stdout_path << " " << stderr_path << "\n";
 
   return { result, std::string{ out.begin(), out.end() }, std::string{ err.begin(), err.begin() } };
 }

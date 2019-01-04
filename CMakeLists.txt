@@ -134,6 +134,13 @@ if(ENABLE_CLANG_TIDY)
   endif()
 endif()
 
+include(ExternalProject)
+ExternalProject_Add(tiny-process-library
+  GIT_REPOSITORY https://gitlab.com/eidheim/tiny-process-library.git
+  GIT_TAG v2.0.0
+  INSTALL_COMMAND ""
+)
+
 
 ##
 ## Project Setup
@@ -153,7 +160,8 @@ catch_discover_tests(relaxed_constexpr_tests TEST_PREFIX "relaxed_constexpr.")
 
 if(NOT ONLY_COVERAGE)
   add_executable(arm_emu src/arm_emu.cpp)
-  target_link_libraries(arm_emu PRIVATE project_options project_warnings CONAN_PKG::rang)
+  target_link_libraries(arm_emu PRIVATE project_options project_warnings CONAN_PKG::rang ${CMAKE_BINARY_DIR}/tiny-process-library-prefix/src/tiny-process-library-build/libtiny-process-library.a)
+  target_include_directories(arm_emu PRIVATE ${CMAKE_BINARY_DIR}/tiny-process-library-prefix/src)
 
   add_executable(elf_reader src/elf_reader.cpp)
   target_link_libraries(elf_reader PRIVATE project_options project_warnings)
