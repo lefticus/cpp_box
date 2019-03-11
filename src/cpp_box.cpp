@@ -1,6 +1,7 @@
 #include "../include/cpp_box/arm.hpp"
 #include "../include/cpp_box/elf_reader.hpp"
 #include "../include/cpp_box/state_machine.hpp"
+#include "../include/cpp_box/hardware.hpp"
 #include "../include/cpp_box/utility.hpp"
 
 #include <cmath>
@@ -41,8 +42,18 @@
 {
   cpp_box::utility::Temp_Directory dir{};
 
-  const auto stdout_path{dir.dir() / "stdout"};
-  const auto stderr_path{dir.dir() / "stderr"};
+  const auto stdout_path{ dir.dir() / "stdout" };
+  const auto stderr_path{ dir.dir() / "stderr" };
+
+#if 0
+  const auto quote_command = [](const std::string &str, const std::filesystem::path &, const std::filesystem::path &) {
+#if defined(_MSC_VER)
+    return fmt::format(R"("{}")", str);
+#else
+    return fmt::format(R"({})", str);
+#endif
+  };
+#endif
 
   const auto quote_command = [](const std::string &str, const std::filesystem::path &out, const std::filesystem::path &err) {
 #if defined(_MSC_VER)
@@ -52,49 +63,17 @@
 #endif
   };
 
-
-  const auto result = std::system(quote_command(command, stdout_path, stderr_path).c_str());  // NOLINT we need to make system calls to execute clang_compiler
+  const auto result =
+    std::system(quote_command(command, stdout_path, stderr_path).c_str());  // NOLINT we need to make system calls to execute clang_compiler
   const auto out = cpp_box::utility::read_file(stdout_path);
   const auto err = cpp_box::utility::read_file(stderr_path);
 
-  return {result, std::string{out.begin(), out.end()}, std::string{err.begin(), err.begin()}};
+  return { result, std::string{ out.begin(), out.end() }, std::string{ err.begin(), err.end() } };
 }
 
 
 struct Box
 {
-
-  constexpr static std::uint32_t TOTAL_RAM = 1024 * 1024 * 10;  // 10 MB
-  enum struct Memory_Map : std::uint32_t {
-    // TODO: Add interrupt vectors here
-    //
-    REGISTER_START = 0x00000000,
-    RAM_SIZE       = REGISTER_START + 0x0000,
-    SCREEN_WIDTH   = REGISTER_START + 0x0004,  // 16bit screen width
-    SCREEN_HEIGHT  = REGISTER_START + 0x0006,  // 16bit screen height
-    SCREEN_BPP     = REGISTER_START + 0x0008,  // 8bit screen bits per pixel. Bits are divided evenly across the color space with preference given for
-    // the odd bit to green, then to blue. Special cases for 1 bpp and 2 bpp.
-    // 1 bpp: black or white
-    // 2 bpp: 2 levels of grey (0%, 33%, 66%, 100%)
-    // 3 bpp: 1 bit red, 1 bit green, 1 bit blue. Possible colors: black, white, red, green, blue, yellow, cyan, magenta).
-    // 4 bpp: 1 bit red, 2 bits green, 1 bit blue.
-    // 5 bpp: 1 bit red, 2 bits green, 2 bits blue.
-    // 6 bpp: 2 bits red, 2 bits green, 2 bits blue.
-    // 7 bpp: 2 bits red, 3 bits green, 2 bits blue.
-    // 8 bpp: 2 bits red, 3 bits green, 3 bits blue.
-    // etc
-    // 24 bpp: max value without alpha
-    // 32 bpp: 24 + alpha
-    // 0xA0009,  // 8bit screen refresh rate
-    // 0xA000A,  // 8bit Horizontal aspect
-    // 0xA000B,  // 8bit Vertical aspect
-    SCREEN_BUFFER  = REGISTER_START + 0x000C,  // 32bit pointer to current framebuffer
-    USER_RAM_START = REGISTER_START + 0x1000,  // leave more space for registers, this is where binaries will load
-  };
-
-  constexpr static std::uint32_t DEFAULT_SCREEN_BUFFER = TOTAL_RAM - (1024 * 1024 * 2);  // by default VRAM is 2 MB from top
-  constexpr static std::uint32_t STACK_START           = TOTAL_RAM - 1;
-
 
   template<typename Cont> static void dump_rom(const Cont &c)
   {
@@ -182,6 +161,8 @@ struct Box
   // TODO: Make optimization level, standard, strongly typed things
   static Loaded_Files compile(const std::string &t_str,
                               const std::filesystem::path &t_clang_compiler,
+                              const std::filesystem::path &t_freestanding_stdlib,
+                              const std::filesystem::path &t_hardware_lib,
                               const std::string_view t_optimization_level,
                               const std::string_view t_standard,
                               spdlog::logger &logger)
@@ -202,25 +183,29 @@ struct Box
     }
 
     const auto build_command = fmt::format(
-      R"("{}" -std={} "{}" -c -o "{}" -O{} -g -save-temps=obj --target=arm-none-elf -march=armv4 -mfpu=vfp -mfloat-abi=hard -nostdinc -D__ELF__ -D_LIBCPP_HAS_NO_THREADS)",
+      R"("{}" -std={} "{}" -c -o "{}" -O{} -g -save-temps=obj --target=arm-none-elf -march=armv4 -mfpu=vfp -mfloat-abi=hard -nostdinc -I"{}" -I"{}" -I"{}" -D__ELF__ -D_LIBCPP_HAS_NO_THREADS)",
       t_clang_compiler.string(),
       std::string(t_standard),
       cpp_file.string(),
       obj_file.string(),
-      std::string(t_optimization_level));
+      std::string(t_optimization_level),
+      (t_freestanding_stdlib / "include").string(),
+      (t_freestanding_stdlib / "freestanding" / "include").string(),
+      t_hardware_lib.string());
 
     logger.debug("Executing compile command: '{}'", build_command);
     [[maybe_unused]] const auto [result, output, error] = make_system_call(build_command);
-    const auto assembly = cpp_box::utility::read_file(asm_file);
-    auto loaded         = load_unknown(obj_file, logger);
+    const auto assembly                                 = cpp_box::utility::read_file(asm_file);
+    auto loaded                                         = load_unknown(obj_file, logger);
 
+    logger.debug("Compile stdout: '{}'", output);
+    logger.debug("Compile stderr: '{}'", error);
 
-    const auto disassemble_command = fmt::format(R"("{}" -disassemble -demangle -line-numbers -full-leading-addr -source "{}" > "{}")",
-                                                               (t_clang_compiler.parent_path() / "llvm-objdump").string(),
-                                                               obj_file.string(),
-                                                               disassembly_file.string());
+    const auto disassemble_command = fmt::format(R"("{}" -disassemble -demangle -line-numbers -full-leading-addr -source "{}")",
+                                                 (t_clang_compiler.parent_path() / "llvm-objdump").string(),
+                                                 obj_file.string());
     logger.debug("Executing disassemble command: '{}'", disassemble_command);
-    [[maybe_unused]] const auto disassembly_output = make_system_call(disassemble_command);
+    [[maybe_unused]] const auto [disassembly_result, disassembly, disassembly_error] = make_system_call(disassemble_command);
 
 
     const std::regex strip_attributes{ R"(\n\s+\..*)", std::regex::ECMAScript };
@@ -284,7 +269,6 @@ struct Box
       return memory_locations;
     };
 
-    const auto disassembly = cpp_box::utility::read_file(disassembly_file);
 
     return Loaded_Files{ t_str,
                          std::regex_replace(std::string{ assembly.begin(), assembly.end() }, strip_attributes, ""),
@@ -292,7 +276,7 @@ struct Box
                          loaded.image,
                          static_cast<std::uint32_t>(loaded.entry_point),
                          loaded.good_binary,
-                         parse_disassembly(std::string(disassembly.begin(), disassembly.end()), loaded.section_offsets),
+                         parse_disassembly(disassembly, loaded.section_offsets),
                          loaded.section_offsets };
   }
 
@@ -337,7 +321,7 @@ struct Box
     Timer static_timer{ 0.5f };
 
     bool build_good() const noexcept { return loaded_files.good_binary; }
-    std::unique_ptr<cpp_box::arm::System<TOTAL_RAM, std::vector<std::uint8_t>>> sys;
+    std::unique_ptr<cpp_box::arm::System<cpp_box::Hardware::TOTAL_RAM, std::vector<std::uint8_t>>> sys;
     std::vector<Goal> goals;
     std::size_t current_goal{ 0 };
 
@@ -394,15 +378,17 @@ struct Box
     void reset()
     {
       m_logger.trace("reset()");
-      sys = std::make_unique<decltype(sys)::element_type>(loaded_files.image, static_cast<std::uint32_t>(Memory_Map::USER_RAM_START));
-      sys->setup_run(static_cast<std::uint32_t>(loaded_files.entry_point) + static_cast<std::uint32_t>(Memory_Map::USER_RAM_START));
-      cpp_box::utility::runtime_assert(sys->SP() == STACK_START);
+      sys =
+        std::make_unique<decltype(sys)::element_type>(loaded_files.image, static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::USER_RAM_START));
+      sys->setup_run(static_cast<std::uint32_t>(loaded_files.entry_point)
+                     + static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::USER_RAM_START));
+      cpp_box::utility::runtime_assert(sys->SP() == cpp_box::Hardware::STACK_START);
       m_logger.trace("setting up registers");
-      sys->write_word(static_cast<std::uint32_t>(Memory_Map::RAM_SIZE), TOTAL_RAM);
-      sys->write_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_WIDTH), 64);
-      sys->write_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_HEIGHT), 64);
-      sys->write_byte(static_cast<std::uint32_t>(Memory_Map::SCREEN_BPP), 32);
-      sys->write_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_BUFFER), DEFAULT_SCREEN_BUFFER);
+      sys->write_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::RAM_SIZE), cpp_box::Hardware::TOTAL_RAM);
+      sys->write_half_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_WIDTH), 64);
+      sys->write_half_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_HEIGHT), 64);
+      sys->write_byte(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_BPP), 32);
+      sys->write_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_BUFFER), cpp_box::Hardware::DEFAULT_SCREEN_BUFFER);
     }
 
     void reset_static_timer() { static_timer.reset(); }
@@ -420,7 +406,8 @@ struct Box
     Status(spdlog::logger &logger, const std::filesystem::path &path, std::vector<Goal> t_goals)
       : m_logger{ logger }
       , loaded_files{ load_unknown(path, m_logger) }
-      , sys{ std::make_unique<decltype(sys)::element_type>(loaded_files.image, static_cast<std::uint32_t>(Memory_Map::USER_RAM_START)) }
+      , sys{ std::make_unique<decltype(sys)::element_type>(loaded_files.image,
+                                                           static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::USER_RAM_START)) }
       , goals{ std::move(t_goals) }
     {
       m_logger.trace("Creating Status Object");
@@ -439,20 +426,20 @@ struct Box
 
     void update_display()
     {
-      sf::Vector2u size{ sys->read_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_WIDTH)),
-                         sys->read_half_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_HEIGHT)) };
+      sf::Vector2u size{ sys->read_half_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_WIDTH)),
+                         sys->read_half_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_HEIGHT)) };
       if (size != texture.getSize()) {
         m_logger.trace("Resizing screen to {}, {}", size.x, size.y);
         texture.create(size.x, size.y);
         sprite.setTexture(texture, true);
       }
 
-      const auto display_loc = sys->read_word(static_cast<std::uint32_t>(Memory_Map::SCREEN_BUFFER));
-      if (TOTAL_RAM - display_loc >= size.x * size.y * 4) {
+      if (const auto display_loc = sys->read_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_BUFFER));
+          cpp_box::Hardware::TOTAL_RAM - display_loc >= size.x * size.y * 4) {
         texture.update(&sys->builtin_ram[display_loc]);
       } else {
         // write as many lines as we can if we're past the end of RAM
-        const auto pixels_to_write = std::min(size.x * size.y, (TOTAL_RAM - display_loc) / 4);
+        const auto pixels_to_write = std::min(size.x * size.y, (cpp_box::Hardware::TOTAL_RAM - display_loc) / 4);
         texture.update(&sys->builtin_ram[display_loc], 0, 0, size.x, pixels_to_write / size.x);
       }
     }
@@ -490,9 +477,9 @@ struct Box
   template<typename StringType, typename... Params> void text(const bool enabled, const StringType &format_str, Params &&... params)
   {
     if (!enabled) { ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]); }
-    const auto s = fmt::format(static_cast<const char *>(format_str), std::forward<Params>(params)...);
+    const auto s     = fmt::format(static_cast<const char *>(format_str), std::forward<Params>(params)...);
     const auto begin = s.c_str();
-    const auto end = begin + s.size(); // NOLINT, this is save ptr arithmetic and std::next requires a signed type :P
+    const auto end   = begin + s.size();  // NOLINT, this is save ptr arithmetic and std::next requires a signed type :P
     ImGui::TextUnformatted(begin, end);
     if (!enabled) { ImGui::PopStyleColor(); }
   }
@@ -565,7 +552,7 @@ struct Box
 
       if (ImGui::CollapsingHeader("Memory")) {
         const auto sp                   = status.sys->SP();
-        const std::uint32_t stack_start = sp > STACK_START - 5 * 4 ? STACK_START : sp;
+        const std::uint32_t stack_start = sp > cpp_box::Hardware::STACK_START - 5 * 4 ? cpp_box::Hardware::STACK_START : sp;
         const auto pc                   = status.sys->PC() - 4;
         const std::uint32_t pc_start    = pc < 5 * 4 ? 0 : pc - 5 * 4;
 
@@ -581,14 +568,15 @@ struct Box
                "{:08x}: {:08x} {}",
                pc_loc,
                word,
-               status.loaded_files.location_data[pc_loc - static_cast<std::uint32_t>(Memory_Map::USER_RAM_START)].disassembly.c_str());
+               status.loaded_files.location_data[pc_loc - static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::USER_RAM_START)]
+                 .disassembly.c_str());
         }
       }
 
 
       if (ImGui::CollapsingHeader("Source")) {
         const auto pc              = status.sys->PC() - 4;
-        const auto object_loc      = pc - static_cast<uint32_t>(Memory_Map::USER_RAM_START);
+        const auto object_loc      = pc - static_cast<uint32_t>(cpp_box::Hardware::Memory_Map::USER_RAM_START);
         const auto current_linenum = status.loaded_files.location_data[object_loc].line_number;
         ImGui::BeginChild("Active Source", { ImGui::GetContentRegionAvailWidth(), 300 });
         std::size_t endl  = 0;
@@ -734,10 +722,16 @@ struct Box
         status.update_display();
         break;
       case Status::States::Begin_Build:
-        status.future_build = std::async(std::launch::async, [console = this->console, src = status.loaded_files.src, clang_compiler = this->clang_compiler]() {
-          // string is oversized to allow for a buffer for IMGUI, need to only compile the first part of it
-          return compile(src.substr(0, src.find('\0')), clang_compiler, "3", "c++2a", *console);
-        });
+        status.future_build =
+          std::async(std::launch::async,
+                     [console             = this->console,
+                      src                 = status.loaded_files.src,
+                      clang_compiler      = this->clang_compiler,
+                      freestanding_stdlib = this->freestanding_stdlib,
+                      hardware_lib        = this->hardware_lib]() {
+                       // string is oversized to allow for a buffer for IMGUI, need to only compile the first part of it
+                       return compile(src.substr(0, src.find('\0')), clang_compiler, freestanding_stdlib, hardware_lib, "3", "c++2a", *console);
+                     });
         status.needs_build = false;
         break;
       case Status::States::Parse_Build_Results:
@@ -793,10 +787,16 @@ struct Box
   std::shared_ptr<spdlog::logger> console{ spdlog::stdout_color_mt("console") };
 
   std::filesystem::path clang_compiler{};
+  std::filesystem::path freestanding_stdlib{};
+  std::filesystem::path hardware_lib{};
 
-  explicit Box(std::filesystem::path t_clang_compiler) : clang_compiler(std::move(t_clang_compiler)) {}
+  Box(std::filesystem::path t_clang_compiler, std::filesystem::path t_freestanding_stdlib, std::filesystem::path t_hardware_lib)
+    : clang_compiler{ std::move(t_clang_compiler) }
+    , freestanding_stdlib{ std::move(t_freestanding_stdlib) }
+    , hardware_lib{ std::move(t_hardware_lib) }
+  {
+  }
 };
-
 
 
 int main(const int argc, const char *argv[])
@@ -808,12 +808,10 @@ int main(const int argc, const char *argv[])
   bool showHelp{ false };
   std::filesystem::path initialFile;
 
-  const auto find_clang = [](const auto ... location) {
-    for (const auto &p : std::initializer_list<std::filesystem::path>{location ...})
-    {
+  const auto find_clang = [](const auto... location) {
+    for (const auto &p : std::initializer_list<std::filesystem::path>{ location... }) {
       if (std::error_code ec{}; std::filesystem::is_regular_file(p, ec)) {
-        if (const auto [result, out, err] = make_system_call(fmt::format("{} --version", p.string()));
-            out.find("clang") != std::string::npos) {
+        if (const auto [result, out, err] = make_system_call(fmt::format("{} --version", p.string())); out.find("clang") != std::string::npos) {
           std::cerr << "Found clang: " << out.substr(0, out.find("\n"));
           return p;
         }
@@ -824,7 +822,12 @@ int main(const int argc, const char *argv[])
   };
 
   std::filesystem::path user_provided_clang;
+  std::filesystem::path user_provided_freestanding_stdlib;
+  std::filesystem::path user_provided_hardware_lib;
+
   auto cli = Help(showHelp) | Opt(user_provided_clang, "path")["--clang_compiler"]("compile C++ with <clang_compiler>")
+             | Opt(user_provided_freestanding_stdlib, "path")["--freestanding_stdlib"]("freestanding stdlib implementation to use")
+             | Opt(user_provided_hardware_lib, "path")["--hardware_lib"]("hardware lib implementation to use")
              | Arg(initialFile, "file")("load <file> as an initial program");
 
   auto result = cli.parse(Args(argc, argv));
@@ -847,7 +850,7 @@ int main(const int argc, const char *argv[])
     std::cout << "Using compiler: '" << clang_compiler << "'\n";
   }
 
-  Box box(clang_compiler);
+  Box box(clang_compiler, user_provided_freestanding_stdlib, user_provided_hardware_lib);
 
   box.event_loop(initialFile);
 }

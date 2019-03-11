@@ -493,7 +493,7 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
 
     constexpr Cache_Elem fetch(const std::uint32_t loc, const System &sys) noexcept
     {
-      if (loc > start + (cache.size() * 4)) {
+      if (loc > start + (cache.size() * 4) || loc < start) {
         start = loc;
         fill_cache(sys);
       }

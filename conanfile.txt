@@ -8,6 +8,7 @@ rang/3.1.0@rang/stable
 
 [generators]
 cmake
+cmake_find_package
 
 [options]
 sfml:shared=False

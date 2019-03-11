@@ -6,10 +6,9 @@ if(CCACHE)
   set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE})
 endif()
 
-
-##
-## Set compiler flags before running conan
-##
+#
+# Set compiler flags before running conan
+#
 
 # Link this 'library' to use the standard warnings
 add_library(project_warnings INTERFACE)
@@ -43,36 +42,54 @@ else()
                          INTERFACE -Wall
                                    -Werror # treat all warnings as errors
                                    -Wextra # reasonable and standard
-                                   -Wshadow # warn the user if a variable declaration shadows one
-                                            # from a parent context
-                                   -Wnon-virtual-dtor # warn the user if a class with virtual
-                                                      # functions has a non-virtual destructor. This
-                                                      # helps catch hard to track down memory errors
+                                   -Wshadow # warn the user if a variable
+                                            # declaration shadows one from a
+                                            # parent context
+                                   -Wnon-virtual-dtor # warn the user if a class
+                                                      # with virtual functions
+                                                      # has a non-virtual
+                                                      # destructor. This helps
+                                                      # catch hard to track down
+                                                      # memory errors
                                    -Wold-style-cast # warn for c-style casts
-                                   -Wcast-align # warn for potential performance problem casts
+                                   -Wcast-align # warn for potential performance
+                                                # problem casts
                                    -Wunused # warn on anything being unused
-                                   -Woverloaded-virtual # warn if you overload (not override) a
+                                   -Woverloaded-virtual # warn if you overload
+                                                        # (not override) a
                                                         # virtual function
                                    -Wpedantic # warn if non-standard C++ is used
-                                   -Wconversion # warn on type conversions that may lose data
+                                   -Wconversion # warn on type conversions that
+                                                # may lose data
                                    -Wsign-conversion # warn on sign conversions
-                                   -Wnull-dereference # warn if a null dereference is detected
-                                   -Wdouble-promotion # warn if float is implicit promoted to double
-                                   -Wformat=2 # warn on security issues around functions that format
-                                              # output (ie printf)
+                                   -Wnull-dereference # warn if a null
+                                                      # dereference is detected
+                                   -Wdouble-promotion # warn if float is
+                                                      # implicit promoted to
+                                                      # double
+                                   -Wformat=2 # warn on security issues around
+                                              # functions that format output (ie
+                                              # printf)
                          )
 
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     target_compile_options(project_warnings
-                           INTERFACE -Wmisleading-indentation # warn if identation implies blocks
-                                                              # where blocks do not exist
-                                     -Wduplicated-cond # warn if if / else chain has duplicated
+                           INTERFACE -Wmisleading-indentation # warn if
+                                                              # identation
+                                                              # implies blocks
+                                                              # where blocks do
+                                                              # not exist
+                                     -Wduplicated-cond # warn if if / else chain
+                                                       # has duplicated
                                                        # conditions
-                                     -Wduplicated-branches # warn if if / else branches have
+                                     -Wduplicated-branches # warn if if / else
+                                                           # branches have
                                                            # duplicated code
-                                     -Wlogical-op # warn about logical operations being used where
+                                     -Wlogical-op # warn about logical
+                                                  # operations being used where
                                                   # bitwise were probably wanted
-                                     -Wuseless-cast # warn if you perform a cast to the same type
+                                     -Wuseless-cast # warn if you perform a cast
+                                                    # to the same type
                            )
     target_link_libraries(project_options INTERFACE stdc++fs)
   else()
@@ -85,32 +102,49 @@ else()
   endif()
 endif()
 
-##
-## Load Conan
-##
+#
+# Load Conan
+#
 
 if(NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
-  message(STATUS "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")
-  file(DOWNLOAD "https://raw.githubusercontent.com/conan-io/cmake-conan/v0.12/conan.cmake"
-                "${CMAKE_BINARY_DIR}/conan.cmake")
+  message(
+    STATUS
+      "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")
+  file(
+    DOWNLOAD
+      "https://raw.githubusercontent.com/conan-io/cmake-conan/v0.12/conan.cmake"
+      "${CMAKE_BINARY_DIR}/conan.cmake")
 endif()
-
 
 include(${CMAKE_BINARY_DIR}/conan.cmake)
 conan_check(REQUIRED)
-conan_cmake_run(CONANFILE conanfile.txt BASIC_SETUP CONAN_COMMAND ${CONAN_CMD} CMAKE_TARGETS BUILD missing)
-set(CMAKE_MODULE_PATH /usr/share/SFML/cmake/Modules)
+conan_cmake_run(CONANFILE
+                conanfile.txt
+                BASIC_SETUP
+                CONAN_COMMAND
+                ${CONAN_CMD}
+                CMAKE_TARGETS
+                BUILD
+                missing)
 
-if (CONAN_CATCH2_ROOT_DEBUG)
+set(CMAKE_MODULE_PATH /usr/share/SFML/cmake/Modules ${CMAKE_BINARY_DIR})
+
+if(CONAN_CATCH2_ROOT_DEBUG)
   include(${CONAN_CATCH2_ROOT_DEBUG}/lib/cmake/Catch2/Catch.cmake)
-else ()
+else()
   include(${CONAN_CATCH2_ROOT}/lib/cmake/Catch2/Catch.cmake)
-endif ()
+endif()
 
+find_package(fmt)
+find_package(rang)
+find_package(libpng)
+find_package(clara)
+find_package(catch2)
+find_package(spdlog)
 
-##
-## Options
-##
+#
+# Options
+#
 
 option(BUILD_SHARED_LIBS "Enable compilation of shared libraries" FALSE)
 option(ENABLE_CLANG_TIDY "Enable testing with clang-tidy" FALSE)
@@ -119,7 +153,11 @@ option(ENABLE_CPPCHECK "Enable testing with cppcheck" FALSE)
 if(ENABLE_CPPCHECK)
   find_program(CPPCHECK cppcheck)
   if(CPPCHECK)
-    set(CMAKE_CXX_CPPCHECK ${CPPCHECK} --suppress=syntaxError --enable=all --inconclusive)
+    set(CMAKE_CXX_CPPCHECK
+        ${CPPCHECK}
+        --suppress=syntaxError
+        --enable=all
+        --inconclusive)
   else()
     message(SEND_ERROR "cppcheck requested but executable not found")
   endif()
@@ -134,26 +172,27 @@ if(ENABLE_CLANG_TIDY)
   endif()
 endif()
 
-
-##
-## Project Setup
-##
+#
+# Project Setup
+#
 
 enable_testing()
 
 add_executable(constexpr_tests test/constexpr_tests.cpp)
-target_link_libraries(constexpr_tests PRIVATE project_options project_warnings CONAN_PKG::catch2)
+target_link_libraries(constexpr_tests
+                      PRIVATE project_options project_warnings catch2::catch2)
 catch_discover_tests(constexpr_tests TEST_PREFIX "constexpr.")
 
 add_executable(relaxed_constexpr_tests test/constexpr_tests.cpp)
 target_link_libraries(relaxed_constexpr_tests
-                      PRIVATE project_options project_warnings CONAN_PKG::catch2)
+                      PRIVATE project_options project_warnings catch2::catch2)
 target_compile_definitions(relaxed_constexpr_tests PRIVATE RELAXED_CONSTEXPR=1)
 catch_discover_tests(relaxed_constexpr_tests TEST_PREFIX "relaxed_constexpr.")
 
 if(NOT ONLY_COVERAGE)
   add_executable(arm_emu src/arm_emu.cpp)
-  target_link_libraries(arm_emu PRIVATE project_options project_warnings CONAN_PKG::rang)
+  target_link_libraries(arm_emu
+                        PRIVATE project_options project_warnings rang::rang)
 
   add_executable(elf_reader src/elf_reader.cpp)
   target_link_libraries(elf_reader PRIVATE project_options project_warnings)
@@ -166,7 +205,9 @@ if(NOT ONLY_COVERAGE)
   add_subdirectory(external)
 
   add_library(utility src/utility.cpp)
-  target_link_libraries(utility PRIVATE project_options project_warnings PUBLIC CONAN_PKG::spdlog)
+  target_link_libraries(utility
+                        PRIVATE project_options project_warnings
+                        PUBLIC spdlog::spdlog)
 
   set(THREADS_PREFER_PTHREAD_FLAG ON)
   find_package(Threads REQUIRED)
@@ -179,9 +220,9 @@ if(NOT ONLY_COVERAGE)
                                 utility
                                 imgui
                                 Threads::Threads
-                                CONAN_PKG::fmt
-                                CONAN_PKG::rang
-                                CONAN_PKG::libpng
-                                CONAN_PKG::clara)
+                                fmt::fmt
+                                rang::rang
+                                libpng::libpng
+                                clara::clara)
   target_include_directories(cpp_box SYSTEM PRIVATE external)
 endif()
