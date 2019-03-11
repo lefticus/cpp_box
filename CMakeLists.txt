@@ -190,12 +190,37 @@ target_compile_definitions(relaxed_constexpr_tests PRIVATE RELAXED_CONSTEXPR=1)
 catch_discover_tests(relaxed_constexpr_tests TEST_PREFIX "relaxed_constexpr.")
 
 if(NOT ONLY_COVERAGE)
+  add_library(utility lib/utility.cpp)
+  target_link_libraries(utility
+                        PRIVATE project_options project_warnings fmt::fmt
+                        PUBLIC spdlog::spdlog rang::rang)
+
+  add_library(compiler lib/compiler.cpp)
+  target_link_libraries(compiler
+                        PUBLIC spdlog::spdlog utility
+                        PRIVATE project_options project_warnings fmt::fmt)
+
   add_executable(arm_emu src/arm_emu.cpp)
   target_link_libraries(arm_emu
-                        PRIVATE project_options project_warnings rang::rang)
+                        PRIVATE project_options
+                                project_warnings
+                                rang::rang
+                                compiler
+                                utility)
+
+  add_executable(obj_compiler src/obj_compiler.cpp)
+  target_link_libraries(obj_compiler
+                        PRIVATE project_options
+                                project_warnings
+                                rang::rang
+                                clara::clara
+                                compiler
+                                utility)
+
 
   add_executable(elf_reader src/elf_reader.cpp)
-  target_link_libraries(elf_reader PRIVATE project_options project_warnings)
+  target_link_libraries(elf_reader
+                        PRIVATE project_options project_warnings compiler)
 
   # imgui dependencies
 
@@ -203,11 +228,6 @@ if(NOT ONLY_COVERAGE)
   find_package(OpenGL)
 
   add_subdirectory(external)
-
-  add_library(utility src/utility.cpp)
-  target_link_libraries(utility
-                        PRIVATE project_options project_warnings
-                        PUBLIC spdlog::spdlog)
 
   set(THREADS_PREFER_PTHREAD_FLAG ON)
   find_package(Threads REQUIRED)
@@ -218,10 +238,10 @@ if(NOT ONLY_COVERAGE)
                         PRIVATE project_options
                                 project_warnings
                                 utility
+                                compiler
                                 imgui
                                 Threads::Threads
                                 fmt::fmt
-                                rang::rang
                                 libpng::libpng
                                 clara::clara)
   target_include_directories(cpp_box SYSTEM PRIVATE external)

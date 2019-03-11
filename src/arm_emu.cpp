@@ -4,8 +4,12 @@
 #include <iostream>
 #include <string>
 #include <vector>
-
+#include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/spdlog.h>
+#include "../include/cpp_box/arm.hpp"
 #include "rang.hpp"
+#include "../include/cpp_box/compiler.hpp"
+#include "../include/cpp_box/hardware.hpp"
 
 template<typename Cont> void dump_rom(const Cont &c)
 {
@@ -49,38 +53,37 @@ template<typename System, typename Registers> void dump_state(const System &sys,
 int main(const int argc, const char *argv[])
 {
   std::vector<std::string> args{ argv, argv + argc };
+  auto logger = spdlog::stdout_color_mt("console");
+
 
   if (args.size() == 2) {
     std::cerr << "Attempting to load file: " << args[1] << '\n';
 
-    auto RAM = [&]() {
-      if (std::ifstream ifs{ args.at(1), std::ios::binary }; ifs.good()) {
-        const auto file_size = ifs.seekg(0, std::ios_base::end).tellg();
-        ifs.seekg(0);
-        std::vector<char> data;
-        data.resize(static_cast<std::size_t>(file_size));
-        ifs.read(data.data(), file_size);
-        std::cerr << "Loaded file: '" << args.at(1) << "' of size: " << file_size << '\n';
-        return std::vector<uint8_t>{ begin(data), end(data) };
-      } else {
-        std::cerr << "Error opening file: " << args.at(1) << '\n';
-        exit(EXIT_FAILURE);
-      }
-    }();
+    const auto loaded_files{ cpp_box::load_unknown(std::filesystem::path{ args[1] }, *logger) };
 
-    cpp_box::arm::System sys{ RAM };
-    dump_rom(RAM);
+    auto sys = std::make_unique<cpp_box::arm::System<cpp_box::Hardware::TOTAL_RAM, std::vector<std::uint8_t>>>(
+      loaded_files.image, static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::USER_RAM_START));
 
-    auto last_registers = sys.registers;
+
+    logger->trace("setting up registers");
+    sys->write_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::RAM_SIZE), cpp_box::Hardware::TOTAL_RAM);
+    sys->write_half_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_WIDTH), 64);
+    sys->write_half_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_HEIGHT), 64);
+    sys->write_byte(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_BPP), 32);
+    sys->write_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_BUFFER), cpp_box::Hardware::DEFAULT_SCREEN_BUFFER);
+    //dump_rom(RAM);
+
+//    auto last_registers = sys->registers;
     int opcount         = 0;
     const auto tracer =
       [&opcount]([[maybe_unused]] const auto & /*t_sys*/, [[maybe_unused]] const auto /*t_pc*/, [[maybe_unused]] const auto /*t_ins*/) { ++opcount; };
 
-    sys.run(0x00000000, tracer);
+//    cpp_box::utility::runtime_assert(sys->SP() == cpp_box::Hardware::STACK_START);
+    sys->run(static_cast<std::uint32_t>(loaded_files.entry_point) + static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::USER_RAM_START), tracer);
 
     std::cout << "Total instructions executed: " << opcount << '\n';
 
-    dump_state(sys, last_registers);
+    //dump_state(sys, last_registers);
     // if ((++opcount) % 1000 == 0) { std::cout << opcount << '\n'; }
   }
 }

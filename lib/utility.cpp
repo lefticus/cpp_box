@@ -20,6 +20,40 @@ std::vector<uint8_t> read_file(const std::filesystem::path &t_path)
   }
 }
 
+[[nodiscard]] std::tuple<int, std::string, std::string> make_system_call(const std::string &command)
+{
+  cpp_box::utility::Temp_Directory dir{};
+
+  const auto stdout_path{ dir.dir() / "stdout" };
+  const auto stderr_path{ dir.dir() / "stderr" };
+
+#if 0
+  const auto quote_command = [](const std::string &str, const std::filesystem::path &, const std::filesystem::path &) {
+#if defined(_MSC_VER)
+    return fmt::format(R"("{}")", str);
+#else
+    return fmt::format(R"({})", str);
+#endif
+  };
+#endif
+
+  const auto quote_command = [](const std::string &str, const std::filesystem::path &out, const std::filesystem::path &err) {
+#if defined(_MSC_VER)
+    return fmt::format(R"("{}" 1>"{}" 2>"{}")", str, out.string(), err.string());
+#else
+    return fmt::format(R"({} 1>"{}" 2>"{}")", str, out.string(), err.string());
+#endif
+  };
+
+  const auto result =
+    std::system(quote_command(command, stdout_path, stderr_path).c_str());  // NOLINT we need to make system calls to execute clang_compiler
+  const auto out = cpp_box::utility::read_file(stdout_path);
+  const auto err = cpp_box::utility::read_file(stderr_path);
+
+  return { result, std::string{ out.begin(), out.end() }, std::string{ err.begin(), err.end() } };
+}
+
+
 void resolve_symbols(std::vector<std::uint8_t> &data, const cpp_box::elf::File_Header &file_header, spdlog::logger &logger)
 {
   logger.info("Resolving symbols");
@@ -80,7 +114,8 @@ Temp_Directory::Temp_Directory(const std::string_view t_prefix)
 {
 
   for (int count = 0; count < 1000; ++count) {
-    const auto p = std::filesystem::temp_directory_path() / fmt::format("{}-{}-{:04x}", t_prefix, std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()), count);
+    const auto p = std::filesystem::temp_directory_path()
+                   / fmt::format("{}-{}-{:04x}", t_prefix, std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()), count);
     if (std::filesystem::create_directories(p)) {
       m_dir = p;
       return;
@@ -94,4 +129,4 @@ Temp_Directory::~Temp_Directory()
   std::filesystem::remove_all(m_dir);
 }
 
-}  // namespace cpp_box
+}  // namespace cpp_box::utility

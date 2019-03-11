@@ -3,6 +3,7 @@
 #include "../include/cpp_box/state_machine.hpp"
 #include "../include/cpp_box/hardware.hpp"
 #include "../include/cpp_box/utility.hpp"
+#include "../include/cpp_box/compiler.hpp"
 
 #include <cmath>
 #include <filesystem>
@@ -13,7 +14,6 @@
 #include <map>
 #include <memory>
 #include <random>
-#include <regex>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -31,254 +31,12 @@
 #include <SFML/Window/Event.hpp>
 
 #include <clara.hpp>
-#include <rang.hpp>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
 
-// TODO: Make this return stdout/stderr from system call
-// TODO: Put this in a reusable place
-[[nodiscard]] static std::tuple<int, std::string, std::string> make_system_call(const std::string &command)
-{
-  cpp_box::utility::Temp_Directory dir{};
-
-  const auto stdout_path{ dir.dir() / "stdout" };
-  const auto stderr_path{ dir.dir() / "stderr" };
-
-#if 0
-  const auto quote_command = [](const std::string &str, const std::filesystem::path &, const std::filesystem::path &) {
-#if defined(_MSC_VER)
-    return fmt::format(R"("{}")", str);
-#else
-    return fmt::format(R"({})", str);
-#endif
-  };
-#endif
-
-  const auto quote_command = [](const std::string &str, const std::filesystem::path &out, const std::filesystem::path &err) {
-#if defined(_MSC_VER)
-    return fmt::format(R"("{}" 1>"{}" 2>"{}")", str, out.string(), err.string());
-#else
-    return fmt::format(R"({} 1>"{}" 2>"{}")", str, out.string(), err.string());
-#endif
-  };
-
-  const auto result =
-    std::system(quote_command(command, stdout_path, stderr_path).c_str());  // NOLINT we need to make system calls to execute clang_compiler
-  const auto out = cpp_box::utility::read_file(stdout_path);
-  const auto err = cpp_box::utility::read_file(stderr_path);
-
-  return { result, std::string{ out.begin(), out.end() }, std::string{ err.begin(), err.end() } };
-}
-
-
 struct Box
 {
-
-  template<typename Cont> static void dump_rom(const Cont &c)
-  {
-    std::size_t loc = 0;
-
-
-    std::clog << rang::fg::yellow << fmt::format("Dumping Data At Loc: {}\n", static_cast<const void *>(c.data())) << rang::style::dim;
-
-    for (const auto byte : c) {
-      std::clog << fmt::format(" {:02x}", byte);
-      if ((++loc % 16) == 0) { std::clog << '\n'; }
-    }
-    std::clog << '\n' << rang::style::reset << rang::fg::reset;
-  }
-
-  struct Memory_Location
-  {
-    std::string disassembly;
-    std::filesystem::path filename;
-    int line_number{};
-    std::string section;
-    std::string function_name;
-  };
-
-
-  struct Loaded_Files
-  {
-    std::string src;
-    std::string assembly;
-    // ptr to ensure that the string_view into the image cannot be invalidated
-    // todo: find a better option for this?
-    std::unique_ptr<std::vector<std::uint8_t>> binary_file{};
-    std::basic_string_view<std::uint8_t> image{};
-    std::uint64_t entry_point{};
-    bool good_binary{ false };
-    std::unordered_map<std::uint32_t, Memory_Location> location_data;
-    std::map<std::string, std::uint64_t> section_offsets;
-  };
-
-
-  static Loaded_Files load_unknown(const std::filesystem::path &t_path, spdlog::logger &logger)
-  {
-    auto data = std::make_unique<std::vector<std::uint8_t>>(cpp_box::utility::read_file(t_path));
-    logger.info("Loading unknown file type: '{}', file exists? {}", t_path.string(), std::filesystem::exists(t_path));
-
-    if (data->size() >= 64) {
-      const auto file_header = cpp_box::elf::File_Header{ { data->data(), data->size() } };
-      logger.info("'{}' is ELF?: {}", t_path.string(), file_header.is_elf_file());
-      if (file_header.is_elf_file()) {
-        const auto sh_string_table = file_header.sh_string_table();
-
-        // TODO: make this local map better
-        std::map<std::string, std::uint64_t> section_offsets;
-
-        for (const auto &header : file_header.section_headers()) {
-          const auto header_name       = std::string{ header.name(sh_string_table) };
-          const auto offset            = header.offset();
-          section_offsets[header_name] = offset;
-          logger.trace("Section: '{}', offset: {}", header_name, offset);
-        }
-
-        const auto string_table = file_header.string_table();
-        for (const auto &header : file_header.section_headers()) {
-          for (const auto &symbol_table_entry : header.symbol_table_entries()) {
-            if (symbol_table_entry.name(string_table) == "main") {
-              cpp_box::utility::resolve_symbols(*data, file_header, logger);
-              std::basic_string_view<std::uint8_t> data_view{ data->data(), data->size() };
-              const auto main_section     = file_header.section_header(symbol_table_entry.section_header_table_index());
-              const auto main_file_offset = static_cast<std::uint32_t>(main_section.offset() + symbol_table_entry.value());
-              logger.info(
-                "'main' symbol found in '{}':{} file offset: {}", main_section.name(sh_string_table), symbol_table_entry.value(), main_file_offset);
-              return Loaded_Files{ "", "", std::move(data), data_view, main_file_offset, true, {}, section_offsets };
-            }
-          }
-        }
-      }
-    }
-
-    // if we make it here it's not an elf file or doesn't have main, assuming a src file
-    logger.info("Didn't find a main, assuming C++ src file");
-
-    return { std::string{ data->begin(), data->end() }, "", {}, {}, {}, false, {}, {} };
-  }
-
-  // TODO: Make optimization level, standard, strongly typed things
-  static Loaded_Files compile(const std::string &t_str,
-                              const std::filesystem::path &t_clang_compiler,
-                              const std::filesystem::path &t_freestanding_stdlib,
-                              const std::filesystem::path &t_hardware_lib,
-                              const std::string_view t_optimization_level,
-                              const std::string_view t_standard,
-                              spdlog::logger &logger)
-  {
-    logger.info("Compile Starting");
-
-    cpp_box::utility::Temp_Directory dir{};
-
-    logger.debug("Using dir: '{}'", dir.dir().string());
-    const auto cpp_file         = dir.dir() / "src.cpp";
-    const auto asm_file         = dir.dir() / "src.s";
-    const auto obj_file         = dir.dir() / "src.o";
-    const auto disassembly_file = dir.dir() / "src.dis";
-
-    if (std::ofstream ofs(cpp_file); ofs.good()) {
-      ofs.write(t_str.data(), static_cast<std::streamsize>(t_str.size()));
-      ofs.flush();  // make sure OS flushes file before clang tries to load it
-    }
-
-    const auto build_command = fmt::format(
-      R"("{}" -std={} "{}" -c -o "{}" -O{} -g -save-temps=obj --target=arm-none-elf -march=armv4 -mfpu=vfp -mfloat-abi=hard -nostdinc -I"{}" -I"{}" -I"{}" -D__ELF__ -D_LIBCPP_HAS_NO_THREADS)",
-      t_clang_compiler.string(),
-      std::string(t_standard),
-      cpp_file.string(),
-      obj_file.string(),
-      std::string(t_optimization_level),
-      (t_freestanding_stdlib / "include").string(),
-      (t_freestanding_stdlib / "freestanding" / "include").string(),
-      t_hardware_lib.string());
-
-    logger.debug("Executing compile command: '{}'", build_command);
-    [[maybe_unused]] const auto [result, output, error] = make_system_call(build_command);
-    const auto assembly                                 = cpp_box::utility::read_file(asm_file);
-    auto loaded                                         = load_unknown(obj_file, logger);
-
-    logger.debug("Compile stdout: '{}'", output);
-    logger.debug("Compile stderr: '{}'", error);
-
-    const auto disassemble_command = fmt::format(R"("{}" -disassemble -demangle -line-numbers -full-leading-addr -source "{}")",
-                                                 (t_clang_compiler.parent_path() / "llvm-objdump").string(),
-                                                 obj_file.string());
-    logger.debug("Executing disassemble command: '{}'", disassemble_command);
-    [[maybe_unused]] const auto [disassembly_result, disassembly, disassembly_error] = make_system_call(disassemble_command);
-
-
-    const std::regex strip_attributes{ R"(\n\s+\..*)", std::regex::ECMAScript };
-    dump_rom(loaded.image);
-
-    const auto parse_disassembly = [&logger](const std::string &file, const auto &section_offsets) {
-      const std::regex read_disassembly{ R"(\s+([0-9a-f]+):\s+(..) (..) (..) (..) \t(.*))" };
-      const std::regex read_section_name{ R"(^Disassembly of section (.*):$)" };
-      const std::regex read_function_name{ R"(^(.*:)$)" };
-      const std::regex read_line_number{ R"(^; (.*):([0-9]+)$)" };
-      const std::regex read_source_code{ R"(^; (.*)$)" };
-
-      std::stringstream ss{ file };
-
-      std::unordered_map<std::uint32_t, Memory_Location> memory_locations;
-
-      std::string current_function_name{};
-      std::string current_section{};
-      std::uint32_t current_offset{};
-      std::string current_file_name{};
-      int current_line_number{};
-      std::string current_source_text{};
-
-      for (std::string line; std::getline(ss, line);) {
-        std::smatch results;
-        if (std::regex_match(line, results, read_disassembly)) {
-          logger.trace("Parsed disassembly line: (offset: '{}') '{}' '{}' '{}' '{}' '{}'",
-                       results.str(1),
-                       results.str(2),
-                       results.str(3),
-                       results.str(4),
-                       results.str(5),
-                       results.str(6));
-          const auto b1    = static_cast<std::uint32_t>(std::stoi(results.str(2), nullptr, 16));
-          const auto b2    = static_cast<std::uint32_t>(std::stoi(results.str(3), nullptr, 16));
-          const auto b3    = static_cast<std::uint32_t>(std::stoi(results.str(4), nullptr, 16));
-          const auto b4    = static_cast<std::uint32_t>(std::stoi(results.str(5), nullptr, 16));
-          const auto value = (b4 << 24) | (b3 << 16) | (b2 << 8) | b1;
-
-          current_offset = static_cast<std::uint32_t>(std::stoi(results.str(1), nullptr, 16));
-
-          logger.trace("Disassembly: '{:08x}', '{}'", value, results.str(6));
-          memory_locations[static_cast<std::uint32_t>(current_offset + section_offsets.at(current_section))] =
-            Memory_Location{ results.str(6), current_file_name, current_line_number, current_section, current_function_name };
-
-        } else if (std::regex_match(line, results, read_section_name)) {
-          logger.trace("Entering binary section: '{}'", results.str(1));
-          current_section = results.str(1);
-        } else if (std::regex_match(line, results, read_line_number)) {
-          logger.trace("Entering line: '{}':'{}'", results.str(1), results.str(2));
-          current_file_name   = results.str(1);
-          current_line_number = std::stoi(results.str(2));
-        } else if (std::regex_match(line, results, read_source_code)) {
-          logger.trace("Source line: '{}'", results.str(1));
-          current_source_text = results.str(1);
-        } else if (std::regex_match(line, results, read_function_name)) {
-          logger.trace("Entering function: '{}'", results.str(1));
-          current_function_name = results.str(1);
-        }
-      }
-      return memory_locations;
-    };
-
-
-    return Loaded_Files{ t_str,
-                         std::regex_replace(std::string{ assembly.begin(), assembly.end() }, strip_attributes, ""),
-                         std::move(loaded.binary_file),
-                         loaded.image,
-                         static_cast<std::uint32_t>(loaded.entry_point),
-                         loaded.good_binary,
-                         parse_disassembly(disassembly, loaded.section_offsets),
-                         loaded.section_offsets };
-  }
 
   struct Inputs
   {
@@ -317,7 +75,7 @@ struct Box
     };
 
 
-    Loaded_Files loaded_files;
+    cpp_box::Loaded_Files loaded_files;
     Timer static_timer{ 0.5f };
 
     bool build_good() const noexcept { return loaded_files.good_binary; }
@@ -405,7 +163,7 @@ struct Box
 
     Status(spdlog::logger &logger, const std::filesystem::path &path, std::vector<Goal> t_goals)
       : m_logger{ logger }
-      , loaded_files{ load_unknown(path, m_logger) }
+      , loaded_files{ cpp_box::load_unknown(path, m_logger) }
       , sys{ std::make_unique<decltype(sys)::element_type>(loaded_files.image,
                                                            static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::USER_RAM_START)) }
       , goals{ std::move(t_goals) }
@@ -461,7 +219,7 @@ struct Box
       return "Unknown";
     }
 
-    std::future<Loaded_Files> future_build;
+    std::future<cpp_box::Loaded_Files> future_build;
     bool needs_build{ true };
 
 
@@ -722,16 +480,16 @@ struct Box
         status.update_display();
         break;
       case Status::States::Begin_Build:
-        status.future_build =
-          std::async(std::launch::async,
-                     [console             = this->console,
-                      src                 = status.loaded_files.src,
-                      clang_compiler      = this->clang_compiler,
-                      freestanding_stdlib = this->freestanding_stdlib,
-                      hardware_lib        = this->hardware_lib]() {
-                       // string is oversized to allow for a buffer for IMGUI, need to only compile the first part of it
-                       return compile(src.substr(0, src.find('\0')), clang_compiler, freestanding_stdlib, hardware_lib, "3", "c++2a", *console);
-                     });
+        status.future_build = std::async(
+          std::launch::async,
+          [console             = this->console,
+           src                 = status.loaded_files.src,
+           clang_compiler      = this->clang_compiler,
+           freestanding_stdlib = this->freestanding_stdlib,
+           hardware_lib        = this->hardware_lib]() {
+            // string is oversized to allow for a buffer for IMGUI, need to only compile the first part of it
+            return cpp_box::compile(src.substr(0, src.find('\0')), clang_compiler, freestanding_stdlib, hardware_lib, "3", "c++2a", *console);
+          });
         status.needs_build = false;
         break;
       case Status::States::Parse_Build_Results:
@@ -808,19 +566,6 @@ int main(const int argc, const char *argv[])
   bool showHelp{ false };
   std::filesystem::path initialFile;
 
-  const auto find_clang = [](const auto... location) {
-    for (const auto &p : std::initializer_list<std::filesystem::path>{ location... }) {
-      if (std::error_code ec{}; std::filesystem::is_regular_file(p, ec)) {
-        if (const auto [result, out, err] = make_system_call(fmt::format("{} --version", p.string())); out.find("clang") != std::string::npos) {
-          std::cerr << "Found clang: " << out.substr(0, out.find("\n"));
-          return p;
-        }
-      }
-    }
-
-    return std::filesystem::path{};
-  };
-
   std::filesystem::path user_provided_clang;
   std::filesystem::path user_provided_freestanding_stdlib;
   std::filesystem::path user_provided_hardware_lib;
@@ -841,7 +586,7 @@ int main(const int argc, const char *argv[])
     return EXIT_SUCCESS;
   }
 
-  const auto clang_compiler = find_clang(user_provided_clang, R"(C:\Program Files\LLVM\bin\clang++)", "/usr/local/bin/clang++", "/usr/bin/clang++");
+  const auto clang_compiler = cpp_box::find_clang(user_provided_clang, R"(C:\Program Files\LLVM\bin\clang++)", "/usr/local/bin/clang++", "/usr/bin/clang++");
 
   if (clang_compiler.empty()) {
     std::cerr << "Unable to locate a viable clang compiler\n";
