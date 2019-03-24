@@ -217,10 +217,17 @@ if(NOT ONLY_COVERAGE)
                                 compiler
                                 utility)
 
-
   add_executable(elf_reader src/elf_reader.cpp)
   target_link_libraries(elf_reader
                         PRIVATE project_options project_warnings compiler)
+
+  add_executable(elf_reader_fuzzer test/elf_reader_fuzzer.cpp)
+  target_link_libraries(elf_reader_fuzzer
+                        PRIVATE project_options
+                                project_warnings
+                                compiler
+                                -fsanitize=address,fuzzer)
+  target_compile_options(elf_reader_fuzzer INTERFACE -fsanitize=address,fuzzer)
 
   # imgui dependencies
 

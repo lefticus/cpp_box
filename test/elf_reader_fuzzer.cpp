@@ -5,21 +5,10 @@
 #include <fstream>
 #include <iostream>
 
-int main(const int argc, const char *const argv[])
+
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, std::size_t size)
 {
-  std::vector<std::string> args{ argv, std::next(argv, argc) };
-  const std::filesystem::path exec_name{ args.at(0) };
-
-  if (argc != 2) {
-    std::cerr << "usage: " << exec_name << " <filename>\n";
-    return EXIT_FAILURE;
-  }
-
-  const std::filesystem::path filename{ args.at(1) };
-
-  const auto data = cpp_box::utility::read_file(filename);
-
-  const auto file_header = cpp_box::elf::File_Header({ data.data(), data.size() });
+  const auto file_header = cpp_box::elf::File_Header({ data, size });
 
   std::cout << "is_elf_file: " << file_header.is_elf_file() << '\n';
   std::cout << "program_header_num_entries: " << file_header.program_header_num_entries() << '\n';
@@ -54,4 +43,6 @@ int main(const int argc, const char *const argv[])
                 << " symbol name: " << file_header.symbol_table().symbol_table_entry(relocation_table_entry.symbol()).name(string_table) << '\n';
     }
   }
+
+  return 0;
 }

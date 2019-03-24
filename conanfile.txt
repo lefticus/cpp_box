@@ -1,5 +1,5 @@
 [requires]
-sfml/2.5.0@bincrafters/stable
+sfml/2.5.1@bincrafters/stable
 catch2/2.4.0@bincrafters/stable
 clara/1.1.4@bincrafters/stable
 spdlog/1.1.0@bincrafters/stable
