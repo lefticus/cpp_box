@@ -1,7 +1,7 @@
 #include "../include/cpp_box/arm.hpp"
 #include "../include/cpp_box/elf_reader.hpp"
 #include "../include/cpp_box/state_machine.hpp"
-#include "../include/cpp_box/hardware.hpp"
+#include "../include/cpp_box/memory_map.hpp"
 #include "../include/cpp_box/utility.hpp"
 #include "../include/cpp_box/compiler.hpp"
 

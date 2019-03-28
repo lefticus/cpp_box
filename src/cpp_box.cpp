@@ -1,7 +1,7 @@
 #include "../include/cpp_box/arm.hpp"
 #include "../include/cpp_box/elf_reader.hpp"
 #include "../include/cpp_box/state_machine.hpp"
-#include "../include/cpp_box/hardware.hpp"
+#include "../include/cpp_box/memory_map.hpp"
 #include "../include/cpp_box/utility.hpp"
 #include "../include/cpp_box/compiler.hpp"
 
@@ -79,7 +79,7 @@ struct Box
     Timer static_timer{ 0.5f };
 
     bool build_good() const noexcept { return loaded_files.good_binary; }
-    std::unique_ptr<cpp_box::arm::System<cpp_box::Hardware::TOTAL_RAM, std::vector<std::uint8_t>>> sys;
+    std::unique_ptr<cpp_box::arm::System<cpp_box::system::TOTAL_RAM, std::vector<std::uint8_t>>> sys;
     std::vector<Goal> goals;
     std::size_t current_goal{ 0 };
 
@@ -137,16 +137,16 @@ struct Box
     {
       m_logger.trace("reset()");
       sys =
-        std::make_unique<decltype(sys)::element_type>(loaded_files.image, static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::USER_RAM_START));
+        std::make_unique<decltype(sys)::element_type>(loaded_files.image, static_cast<std::uint32_t>(cpp_box::system::Memory_Map::USER_RAM_START));
       sys->setup_run(static_cast<std::uint32_t>(loaded_files.entry_point)
-                     + static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::USER_RAM_START));
-      cpp_box::utility::runtime_assert(sys->SP() == cpp_box::Hardware::STACK_START);
+                     + static_cast<std::uint32_t>(cpp_box::system::Memory_Map::USER_RAM_START));
+      cpp_box::utility::runtime_assert(sys->SP() == cpp_box::system::STACK_START);
       m_logger.trace("setting up registers");
-      sys->write_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::RAM_SIZE), cpp_box::Hardware::TOTAL_RAM);
-      sys->write_half_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_WIDTH), 64);
-      sys->write_half_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_HEIGHT), 64);
-      sys->write_byte(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_BPP), 32);
-      sys->write_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_BUFFER), cpp_box::Hardware::DEFAULT_SCREEN_BUFFER);
+      sys->write_word(static_cast<std::uint32_t>(cpp_box::system::Memory_Map::RAM_SIZE), cpp_box::system::TOTAL_RAM);
+      sys->write_half_word(static_cast<std::uint32_t>(cpp_box::system::Memory_Map::SCREEN_WIDTH), 64);
+      sys->write_half_word(static_cast<std::uint32_t>(cpp_box::system::Memory_Map::SCREEN_HEIGHT), 64);
+      sys->write_byte(static_cast<std::uint32_t>(cpp_box::system::Memory_Map::SCREEN_BPP), 32);
+      sys->write_word(static_cast<std::uint32_t>(cpp_box::system::Memory_Map::SCREEN_BUFFER), cpp_box::system::DEFAULT_SCREEN_BUFFER);
     }
 
     void reset_static_timer() { static_timer.reset(); }
@@ -165,7 +165,7 @@ struct Box
       : m_logger{ logger }
       , loaded_files{ cpp_box::load_unknown(path, m_logger) }
       , sys{ std::make_unique<decltype(sys)::element_type>(loaded_files.image,
-                                                           static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::USER_RAM_START)) }
+                                                           static_cast<std::uint32_t>(cpp_box::system::Memory_Map::USER_RAM_START)) }
       , goals{ std::move(t_goals) }
     {
       m_logger.trace("Creating Status Object");
@@ -184,20 +184,20 @@ struct Box
 
     void update_display()
     {
-      sf::Vector2u size{ sys->read_half_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_WIDTH)),
-                         sys->read_half_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_HEIGHT)) };
+      sf::Vector2u size{ sys->read_half_word(static_cast<std::uint32_t>(cpp_box::system::Memory_Map::SCREEN_WIDTH)),
+                         sys->read_half_word(static_cast<std::uint32_t>(cpp_box::system::Memory_Map::SCREEN_HEIGHT)) };
       if (size != texture.getSize()) {
         m_logger.trace("Resizing screen to {}, {}", size.x, size.y);
         texture.create(size.x, size.y);
         sprite.setTexture(texture, true);
       }
 
-      if (const auto display_loc = sys->read_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_BUFFER));
-          cpp_box::Hardware::TOTAL_RAM - display_loc >= size.x * size.y * 4) {
+      if (const auto display_loc = sys->read_word(static_cast<std::uint32_t>(cpp_box::system::Memory_Map::SCREEN_BUFFER));
+          cpp_box::system::TOTAL_RAM - display_loc >= size.x * size.y * 4) {
         texture.update(&sys->builtin_ram[display_loc]);
       } else {
         // write as many lines as we can if we're past the end of RAM
-        const auto pixels_to_write = std::min(size.x * size.y, (cpp_box::Hardware::TOTAL_RAM - display_loc) / 4);
+        const auto pixels_to_write = std::min(size.x * size.y, (cpp_box::system::TOTAL_RAM - display_loc) / 4);
         texture.update(&sys->builtin_ram[display_loc], 0, 0, size.x, pixels_to_write / size.x);
       }
     }
@@ -310,7 +310,7 @@ struct Box
 
       if (ImGui::CollapsingHeader("Memory")) {
         const auto sp                   = status.sys->SP();
-        const std::uint32_t stack_start = sp > cpp_box::Hardware::STACK_START - 5 * 4 ? cpp_box::Hardware::STACK_START : sp;
+        const std::uint32_t stack_start = sp > cpp_box::system::STACK_START - 5 * 4 ? cpp_box::system::STACK_START : sp;
         const auto pc                   = status.sys->PC() - 4;
         const std::uint32_t pc_start    = pc < 5 * 4 ? 0 : pc - 5 * 4;
 
@@ -326,7 +326,7 @@ struct Box
                "{:08x}: {:08x} {}",
                pc_loc,
                word,
-               status.loaded_files.location_data[pc_loc - static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::USER_RAM_START)]
+               status.loaded_files.location_data[pc_loc - static_cast<std::uint32_t>(cpp_box::system::Memory_Map::USER_RAM_START)]
                  .disassembly.c_str());
         }
       }
@@ -334,7 +334,7 @@ struct Box
 
       if (ImGui::CollapsingHeader("Source")) {
         const auto pc              = status.sys->PC() - 4;
-        const auto object_loc      = pc - static_cast<uint32_t>(cpp_box::Hardware::Memory_Map::USER_RAM_START);
+        const auto object_loc      = pc - static_cast<uint32_t>(cpp_box::system::Memory_Map::USER_RAM_START);
         const auto current_linenum = status.loaded_files.location_data[object_loc].line_number;
         ImGui::BeginChild("Active Source", { ImGui::GetContentRegionAvailWidth(), 300 });
         std::size_t endl  = 0;

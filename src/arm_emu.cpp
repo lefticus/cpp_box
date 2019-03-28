@@ -9,7 +9,7 @@
 #include "../include/cpp_box/arm.hpp"
 #include "rang.hpp"
 #include "../include/cpp_box/compiler.hpp"
-#include "../include/cpp_box/hardware.hpp"
+#include "../include/cpp_box/memory_map.hpp"
 
 template<typename Cont> void dump_rom(const Cont &c)
 {
@@ -61,16 +61,16 @@ int main(const int argc, const char *argv[])
 
     const auto loaded_files{ cpp_box::load_unknown(std::filesystem::path{ args[1] }, *logger) };
 
-    auto sys = std::make_unique<cpp_box::arm::System<cpp_box::Hardware::TOTAL_RAM, std::vector<std::uint8_t>>>(
-      loaded_files.image, static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::USER_RAM_START));
+    auto sys = std::make_unique<cpp_box::arm::System<cpp_box::system::TOTAL_RAM, std::vector<std::uint8_t>>>(
+      loaded_files.image, static_cast<std::uint32_t>(cpp_box::system::Memory_Map::USER_RAM_START));
 
 
     logger->trace("setting up registers");
-    sys->write_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::RAM_SIZE), cpp_box::Hardware::TOTAL_RAM);
-    sys->write_half_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_WIDTH), 64);
-    sys->write_half_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_HEIGHT), 64);
-    sys->write_byte(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_BPP), 32);
-    sys->write_word(static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::SCREEN_BUFFER), cpp_box::Hardware::DEFAULT_SCREEN_BUFFER);
+    sys->write_word(static_cast<std::uint32_t>(cpp_box::system::Memory_Map::RAM_SIZE), cpp_box::system::TOTAL_RAM);
+    sys->write_half_word(static_cast<std::uint32_t>(cpp_box::system::Memory_Map::SCREEN_WIDTH), 64);
+    sys->write_half_word(static_cast<std::uint32_t>(cpp_box::system::Memory_Map::SCREEN_HEIGHT), 64);
+    sys->write_byte(static_cast<std::uint32_t>(cpp_box::system::Memory_Map::SCREEN_BPP), 32);
+    sys->write_word(static_cast<std::uint32_t>(cpp_box::system::Memory_Map::SCREEN_BUFFER), cpp_box::system::DEFAULT_SCREEN_BUFFER);
     //dump_rom(RAM);
 
 //    auto last_registers = sys->registers;
@@ -78,8 +78,8 @@ int main(const int argc, const char *argv[])
     const auto tracer =
       [&opcount]([[maybe_unused]] const auto & /*t_sys*/, [[maybe_unused]] const auto /*t_pc*/, [[maybe_unused]] const auto /*t_ins*/) { ++opcount; };
 
-//    cpp_box::utility::runtime_assert(sys->SP() == cpp_box::Hardware::STACK_START);
-    sys->run(static_cast<std::uint32_t>(loaded_files.entry_point) + static_cast<std::uint32_t>(cpp_box::Hardware::Memory_Map::USER_RAM_START), tracer);
+//    cpp_box::utility::runtime_assert(sys->SP() == cpp_box::system::STACK_START);
+    sys->run(static_cast<std::uint32_t>(loaded_files.entry_point) + static_cast<std::uint32_t>(cpp_box::system::Memory_Map::USER_RAM_START), tracer);
 
     std::cout << "Total instructions executed: " << opcount << '\n';
 
