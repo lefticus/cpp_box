@@ -8,6 +8,8 @@
 #include "../include/cpp_box/elf_reader.hpp"
 
 #include <fstream>
+#include <sstream>
+#include <string>
 
 namespace cpp_box {
 

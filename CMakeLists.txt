@@ -25,6 +25,7 @@ else()
   option(ONLY_COVERAGE "Build only tests necessary for coverage" FALSE)
   option(LIBCPP "Build with libc++" FALSE)
   option(ENABLE_COVERAGE "Enable coverage reporting for gcc/clang" FALSE)
+  option(ENABLE_FUZZERS "Enable fuzz testing tools" FALSE)
 
   if(ONLY_COVERAGE OR ENABLE_COVERAGE)
     target_compile_options(project_options INTERFACE --coverage -O0 -g)
@@ -221,13 +222,16 @@ if(NOT ONLY_COVERAGE)
   target_link_libraries(elf_reader
                         PRIVATE project_options project_warnings compiler)
 
-  add_executable(elf_reader_fuzzer test/elf_reader_fuzzer.cpp)
-  target_link_libraries(elf_reader_fuzzer
-                        PRIVATE project_options
-                                project_warnings
-                                compiler
-                                -fsanitize=address,fuzzer)
-  target_compile_options(elf_reader_fuzzer INTERFACE -fsanitize=address,fuzzer)
+  if(ENABLE_FUZZERS)
+    add_executable(elf_reader_fuzzer test/elf_reader_fuzzer.cpp)
+    target_link_libraries(elf_reader_fuzzer
+                          PRIVATE project_options
+                                  project_warnings
+                                  compiler
+                                  -fsanitize=address,fuzzer)
+    target_compile_options(elf_reader_fuzzer
+                           INTERFACE -fsanitize=address,fuzzer)
+  endif()
 
   # imgui dependencies
 
