@@ -812,7 +812,7 @@ struct File_Header
 
     for (const auto &section_header : section_headers()) {
       std::uint8_t str[] = ".strtab";
-      if (section_header.name_substr(sh_table) == str) { return section_header.section_data(); }
+      if (section_header.name_substr(sh_table) == std::basic_string_view<std::uint8_t>{str}) { return section_header.section_data(); }
     }
 
     abort();
