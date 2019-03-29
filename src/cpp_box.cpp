@@ -39,8 +39,6 @@ struct MMIO_Devices
   struct Random_Generator
   {
     std::uniform_int_distribution<std::uint32_t> random_word;
-    std::uniform_int_distribution<std::uint16_t> random_half_word;
-    std::uniform_int_distribution<std::uint8_t> random_byte;
 
     std::random_device r;
     std::default_random_engine generator{ r() };
@@ -53,9 +51,18 @@ struct MMIO_Devices
     return loc == static_cast<std::uint32_t>(cpp_box::system::Memory_Map::RANDOM_DEVICE);
   }
 
-  [[nodiscard]] std::uint32_t read_word([[maybe_unused]] const std::uint32_t loc) const noexcept { return generator->random_word(generator->generator); }
-  [[nodiscard]] std::uint16_t read_half_word([[maybe_unused]] const std::uint32_t loc) const noexcept { return generator->random_half_word(generator->generator); }
-  [[nodiscard]] std::uint8_t read_byte([[maybe_unused]] const std::uint32_t loc) const noexcept { return generator->random_byte(generator->generator); }
+  [[nodiscard]] std::uint32_t read_word([[maybe_unused]] const std::uint32_t loc) const noexcept
+  {
+    return generator->random_word(generator->generator);
+  }
+  [[nodiscard]] std::uint16_t read_half_word([[maybe_unused]] const std::uint32_t loc) const noexcept
+  {
+    return static_cast<std::uint16_t>(generator->random_half_word(generator->generator));
+  }
+  [[nodiscard]] std::uint8_t read_byte([[maybe_unused]] const std::uint32_t loc) const noexcept
+  {
+    return static_cast<std::uint8_t>(generator->random_byte(generator->generator));
+  }
 };
 
 struct Box
@@ -159,8 +166,8 @@ struct Box
     void reset()
     {
       m_logger.trace("reset()");
-      sys = std::make_unique<decltype(sys)::element_type>(
-        loaded_files.image, static_cast<std::uint32_t>(cpp_box::system::Memory_Map::USER_RAM_START));
+      sys =
+        std::make_unique<decltype(sys)::element_type>(loaded_files.image, static_cast<std::uint32_t>(cpp_box::system::Memory_Map::USER_RAM_START));
 
       sys->setup_run(static_cast<std::uint32_t>(loaded_files.entry_point) + static_cast<std::uint32_t>(cpp_box::system::Memory_Map::USER_RAM_START));
       cpp_box::utility::runtime_assert(sys->SP() == cpp_box::system::STACK_START);
