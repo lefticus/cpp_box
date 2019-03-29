@@ -1,5 +1,6 @@
-#include <rang.hpp>
 #include <fmt/format.h>
+
+#include <rang.hpp>
 
 namespace cpp_box::utility {
 template<typename Cont> void dump_rom(const Cont &c)

@@ -2,14 +2,14 @@
 #include <spdlog/spdlog.h>
 
 
-#include "../include/cpp_box/utility.hpp"
-#include "../include/cpp_box/print_utilities.hpp"
-#include "../include/cpp_box/compiler.hpp"
-#include "../include/cpp_box/elf_reader.hpp"
-
 #include <fstream>
 #include <sstream>
 #include <string>
+
+#include "../include/cpp_box/compiler.hpp"
+#include "../include/cpp_box/elf_reader.hpp"
+#include "../include/cpp_box/print_utilities.hpp"
+#include "../include/cpp_box/utility.hpp"
 
 namespace cpp_box {
 
@@ -18,7 +18,7 @@ std::pair<bool, std::string> test_clang(const std::filesystem::path &p)
   if (std::error_code ec{}; std::filesystem::is_regular_file(p, ec)) {
     if (const auto [result, out, err] = cpp_box::utility::make_system_call(fmt::format("{} --version", p.string()));
         out.find("clang") != std::string::npos) {
-      return { true, out.substr(0, out.find("\n")) };
+      return { true, out.substr(0, out.find('\n')) };
       ;
     }
   }

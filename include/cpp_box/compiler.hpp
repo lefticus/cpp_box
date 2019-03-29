@@ -1,14 +1,15 @@
-#include <string>
 #include <filesystem>
-#include <memory>
-#include <vector>
 #include <map>
+#include <memory>
+#include <string>
 #include <unordered_map>
+#include <vector>
+
 #include "utility.hpp"
 
 namespace spdlog {
 class logger;
-}
+} // namespace spdlog
 
 namespace cpp_box {
 
@@ -41,10 +42,11 @@ Loaded_Files load_unknown(const std::filesystem::path &t_path, spdlog::logger &l
 
 std::pair<bool, std::string> test_clang(const std::filesystem::path &p);
 
-static const auto find_clang = [](const auto... location) {
+template<typename ... Param>
+auto find_clang(const Param... location) {
   for (const auto &p : std::initializer_list<std::filesystem::path>{ location... }) {
     if (auto [found, id] = test_clang(p); found) {
-      std::cerr << "Found clang: " << id << '\n';
+//      std::cerr << "Found clang: " << id << '\n';
       return p;
     }
   }

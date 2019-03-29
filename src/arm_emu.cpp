@@ -1,13 +1,15 @@
-#include "cpp_box/arm.hpp"
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <string>
 #include <vector>
+
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
-#include "../include/cpp_box/arm.hpp"
+
 #include "rang.hpp"
+
+#include "../include/cpp_box/arm.hpp"
 #include "../include/cpp_box/compiler.hpp"
 #include "../include/cpp_box/memory_map.hpp"
 
@@ -50,7 +52,7 @@ template<typename System, typename Registers> void dump_state(const System &sys,
   std::cout << '\n';
 }
 
-int main(const int argc, const char *argv[])
+int main(const int argc, const char *argv[]) // NOLINT
 {
   std::vector<std::string> args{ argv, argv + argc };
   auto logger = spdlog::stdout_color_mt("console");

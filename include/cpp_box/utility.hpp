@@ -2,8 +2,8 @@
 #define ARM_THING_UTILITY_HPP
 
 #include <cstdint>
-#include <fstream>
 #include <filesystem>
+#include <fstream>
 #include <vector>
 
 namespace spdlog {
@@ -24,7 +24,8 @@ template<typename CharType> void write_binary_file(const std::filesystem::path &
 {
   std::ofstream ofs{ t_path, std::ios_base::out | std::ios_base::binary | std::ios_base::trunc };
 
-  ofs.write(reinterpret_cast<const char *>(data.data()), static_cast<std::streamsize>(data.size() * sizeof(CharType) / sizeof(char)));
+  // It's OK and defined behavior to observe an object via a pointer to `const char *`
+  ofs.write(reinterpret_cast<const char *>(data.data()), static_cast<std::streamsize>(data.size() * sizeof(CharType) / sizeof(char))); // NOLINT
 }
 
 [[nodiscard]] std::tuple<int, std::string, std::string> make_system_call(const std::string &command);

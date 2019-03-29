@@ -1,9 +1,9 @@
 #include "../include/cpp_box/arm.hpp"
-#include "../include/cpp_box/elf_reader.hpp"
-#include "../include/cpp_box/state_machine.hpp"
-#include "../include/cpp_box/memory_map.hpp"
-#include "../include/cpp_box/utility.hpp"
 #include "../include/cpp_box/compiler.hpp"
+#include "../include/cpp_box/elf_reader.hpp"
+#include "../include/cpp_box/memory_map.hpp"
+#include "../include/cpp_box/state_machine.hpp"
+#include "../include/cpp_box/utility.hpp"
 
 #include <cmath>
 #include <filesystem>
@@ -21,8 +21,6 @@
 #include "imgui/lib/imgui-SFML.h"
 #include "imgui/lib/imgui.h"
 
-#include "../include/cpp_box/utility.hpp"
-
 #include <SFML/Graphics/CircleShape.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Graphics/Sprite.hpp>
@@ -31,6 +29,7 @@
 #include <SFML/Window/Event.hpp>
 
 #include <clara.hpp>
+
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
