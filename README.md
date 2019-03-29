@@ -2,7 +2,7 @@
 |------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
 | travis     | [![Travis Build Status](https://travis-ci.org/lefticus/cpp_box.svg?branch=master)](https://travis-ci.org/lefticus/cpp_box)                               |
 | Cirrus CI  | [![Cirrus CI Build Status](https://api.cirrus-ci.com/github/lefticus/cpp_box.svg)](https://cirrus-ci.com/github/lefticus/cpp_box)                        |
-| Appveyor   | ![AppVeyor Build status](https://img.shields.io/appveyor/ci/lefticus/cpp-box.svg)                                                                              |
+| Appveyor   | [![AppVeyor Build status](https://img.shields.io/appveyor/ci/lefticus/cpp-box.svg)](https://ci.appveyor.com/project/lefticus/cpp-box)                                                                              |
 | Codecov    | [![codecov](https://codecov.io/gh/lefticus/cpp_box/branch/master/graph/badge.svg)](https://codecov.io/gh/lefticus/cpp_box)                        |
 | CodeFactor | [![CodeFactor](https://www.codefactor.io/repository/github/lefticus/cpp_box/badge)](https://www.codefactor.io/repository/github/lefticus/cpp_box) |
 # cpp_box
