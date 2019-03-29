@@ -52,7 +52,7 @@ auto find_clang(const Param... location) {
   }
 
   return std::filesystem::path{};
-};
+}
 
 
 Loaded_Files compile(const std::string &t_str,
