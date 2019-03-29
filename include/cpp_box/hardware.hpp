@@ -29,9 +29,9 @@ template<typename T> inline void poke(const std::uint32_t loc, const T &t)
 struct Hardware
 {
 
-  template<typename T> auto peek(const Memory_Map loc) { return cpp_box::peek<T>(static_cast<std::uint32_t>(loc)); }
+  template<typename T> auto peek(const system::Memory_Map loc) { return cpp_box::peek<T>(static_cast<std::uint32_t>(loc)); }
 
-  template<typename T> inline void poke(const Memory_Map loc, const T &t) { cpp_box::poke(static_cast<std::uint32_t>(loc), t); }
+  template<typename T> inline void poke(const system::Memory_Map loc, const T &t) { cpp_box::poke(static_cast<std::uint32_t>(loc), t); }
 
 };
 
