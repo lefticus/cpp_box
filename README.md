@@ -5,6 +5,8 @@
 | Appveyor   | [![AppVeyor Build status](https://img.shields.io/appveyor/ci/lefticus/cpp-box.svg)](https://ci.appveyor.com/project/lefticus/cpp-box)                                                                              |
 | Codecov    | [![codecov](https://codecov.io/gh/lefticus/cpp_box/branch/master/graph/badge.svg)](https://codecov.io/gh/lefticus/cpp_box)                        |
 | CodeFactor | [![CodeFactor](https://www.codefactor.io/repository/github/lefticus/cpp_box/badge)](https://www.codefactor.io/repository/github/lefticus/cpp_box) |
+| Codacy     | [![Codacy Badge](https://api.codacy.com/project/badge/Grade/a649cfbcb16d4cba885a690c1d47994b)](https://www.codacy.com/app/lefticus/cpp_box?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=lefticus/cpp_box&amp;utm_campaign=Badge_Grade) |
+
 # cpp_box
 
 It implements a partial ARMv4 architecture in software.
