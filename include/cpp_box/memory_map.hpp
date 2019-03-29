@@ -29,6 +29,7 @@ enum struct Memory_Map : std::uint32_t {
   // 0xA000A,  // 8bit Horizontal aspect
   // 0xA000B,  // 8bit Vertical aspect
   SCREEN_BUFFER  = REGISTER_START + 0x000C,  // 32bit pointer to current framebuffer
+  RANDOM_DEVICE  = REGISTER_START + 0x0010,  // 32bits of random data
   USER_RAM_START = REGISTER_START + 0x1000,  // leave more space for registers, this is where binaries will load
 };
 

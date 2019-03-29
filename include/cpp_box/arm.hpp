@@ -298,8 +298,15 @@ struct Lookup_Table
   return table;
 }
 
+struct NO_MMIO
+{
+  [[nodiscard]] constexpr bool is_mmio_range([[maybe_unused]] const std::uint32_t loc) const noexcept { return false; }
+  [[nodiscard]] constexpr std::uint32_t read_word([[maybe_unused]] const std::uint32_t loc) const noexcept { return 0; }
+  [[nodiscard]] constexpr std::uint16_t read_half_word([[maybe_unused]] const std::uint32_t loc) const noexcept { return 0; }
+  [[nodiscard]] constexpr std::uint8_t read_byte([[maybe_unused]] const std::uint32_t loc) const noexcept { return 0; }
+};
 
-template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_t, RAM_Size>> struct System
+template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_t, RAM_Size>, typename MMIO_Callback = NO_MMIO> struct System
 {
   std::uint32_t CSPR{};
 
@@ -337,6 +344,7 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
 
 
   RAM_Type builtin_ram{ init_ram(builtin_ram) };  // just passing ourselves in to resolve the type
+  MMIO_Callback mmio_callback{};
 
   constexpr void unhandled_instruction([[maybe_unused]] const Instruction ins, [[maybe_unused]] const Instruction_Type type) { abort(); }
 
@@ -344,6 +352,8 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
   // read past end of allocated memory will return an unspecified value
   [[nodiscard]] constexpr std::uint8_t read_byte(const std::uint32_t loc) const noexcept
   {
+    if (mmio_callback.is_mmio_range(loc)) { return mmio_callback.read_byte(loc); }
+
     if (loc < RAM_Size) {
       return builtin_ram[loc];
     } else {
@@ -363,6 +373,8 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
   // read past end of allocated memory will return an unspecified value
   [[nodiscard]] constexpr std::uint16_t read_half_word(const std::uint32_t loc) const noexcept
   {
+    if (mmio_callback.is_mmio_range(loc)) { return mmio_callback.read_half_word(loc); }
+
     const std::uint8_t *data = [&]() -> const std::uint8_t * {
       if (loc + 1 < RAM_Size) { return &builtin_ram[loc]; }
       return nullptr;
@@ -382,6 +394,8 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
   // read past end of allocated memory will return an unspecified value
   [[nodiscard]] constexpr std::uint32_t read_word(const std::uint32_t loc) const noexcept
   {
+    if (mmio_callback.is_mmio_range(loc)) { return mmio_callback.read_word(loc); }
+
     const std::uint8_t *data = [&]() -> const std::uint8_t * {
       if (loc + 3 < RAM_Size) { return &builtin_ram[loc]; }
       return nullptr;
@@ -438,13 +452,21 @@ template<std::size_t RAM_Size = 1024, typename RAM_Type = std::array<std::uint8_
   constexpr System &operator=(const System &) = default;
   constexpr System()                          = default;
 
-  template<typename Container> constexpr explicit System(const Container &memory, const std::uint32_t start_location = 0) noexcept
+  template<typename Container>
+  constexpr explicit System(const Container &memory,
+                            const std::uint32_t start_location = 0,
+                            MMIO_Callback &&t_mmio_callback    = MMIO_Callback{}) noexcept
+    : mmio_callback{ std::move(t_mmio_callback) }
   {
     for (std::size_t loc = 0; loc < memory.size(); ++loc) { write_byte(static_cast<std::uint32_t>(loc + start_location), memory[loc]); }
     i_cache.fill_cache(*this);
   }
 
-  template<std::size_t Size> constexpr explicit System(const std::array<std::uint8_t, Size> &memory, const std::uint32_t start_location = 0) noexcept
+  template<std::size_t Size>
+  constexpr explicit System(const std::array<std::uint8_t, Size> &memory,
+                            const std::uint32_t start_location = 0,
+                            MMIO_Callback &&t_mmio_callback    = MMIO_Callback{}) noexcept
+    : mmio_callback{ std::move(t_mmio_callback) }
   {
     static_assert(Size <= RAM_Size);
 

@@ -34,6 +34,30 @@
 #include <spdlog/spdlog.h>
 
 
+struct MMIO_Devices
+{
+  struct Random_Generator
+  {
+    std::uniform_int_distribution<std::uint32_t> random_word;
+    std::uniform_int_distribution<std::uint16_t> random_half_word;
+    std::uniform_int_distribution<std::uint8_t> random_byte;
+
+    std::random_device r;
+    std::default_random_engine generator{ r() };
+  };
+
+  std::unique_ptr<Random_Generator> generator = std::make_unique<Random_Generator>();
+
+  [[nodiscard]] constexpr bool is_mmio_range(const std::uint32_t loc) const noexcept
+  {
+    return loc == static_cast<std::uint32_t>(cpp_box::system::Memory_Map::RANDOM_DEVICE);
+  }
+
+  [[nodiscard]] std::uint32_t read_word([[maybe_unused]] const std::uint32_t loc) const noexcept { return generator->random_word(generator->generator); }
+  [[nodiscard]] std::uint16_t read_half_word([[maybe_unused]] const std::uint32_t loc) const noexcept { return generator->random_half_word(generator->generator); }
+  [[nodiscard]] std::uint8_t read_byte([[maybe_unused]] const std::uint32_t loc) const noexcept { return generator->random_byte(generator->generator); }
+};
+
 struct Box
 {
 
@@ -78,7 +102,7 @@ struct Box
     Timer static_timer{ 0.5f };
 
     bool build_good() const noexcept { return loaded_files.good_binary; }
-    std::unique_ptr<cpp_box::arm::System<cpp_box::system::TOTAL_RAM, std::vector<std::uint8_t>>> sys;
+    std::unique_ptr<cpp_box::arm::System<cpp_box::system::TOTAL_RAM, std::vector<std::uint8_t>, MMIO_Devices>> sys;
     std::vector<Goal> goals;
     std::size_t current_goal{ 0 };
 
@@ -135,10 +159,10 @@ struct Box
     void reset()
     {
       m_logger.trace("reset()");
-      sys =
-        std::make_unique<decltype(sys)::element_type>(loaded_files.image, static_cast<std::uint32_t>(cpp_box::system::Memory_Map::USER_RAM_START));
-      sys->setup_run(static_cast<std::uint32_t>(loaded_files.entry_point)
-                     + static_cast<std::uint32_t>(cpp_box::system::Memory_Map::USER_RAM_START));
+      sys = std::make_unique<decltype(sys)::element_type>(
+        loaded_files.image, static_cast<std::uint32_t>(cpp_box::system::Memory_Map::USER_RAM_START));
+
+      sys->setup_run(static_cast<std::uint32_t>(loaded_files.entry_point) + static_cast<std::uint32_t>(cpp_box::system::Memory_Map::USER_RAM_START));
       cpp_box::utility::runtime_assert(sys->SP() == cpp_box::system::STACK_START);
       m_logger.trace("setting up registers");
       sys->write_word(static_cast<std::uint32_t>(cpp_box::system::Memory_Map::RAM_SIZE), cpp_box::system::TOTAL_RAM);
@@ -321,12 +345,12 @@ struct Box
           ImGui::SameLine();
           const auto pc_loc = pc_start + idx;
           const auto word   = status.sys->read_word(pc_loc);
-          text(pc_loc == pc,
-               "{:08x}: {:08x} {}",
-               pc_loc,
-               word,
-               status.loaded_files.location_data[pc_loc - static_cast<std::uint32_t>(cpp_box::system::Memory_Map::USER_RAM_START)]
-                 .disassembly.c_str());
+          text(
+            pc_loc == pc,
+            "{:08x}: {:08x} {}",
+            pc_loc,
+            word,
+            status.loaded_files.location_data[pc_loc - static_cast<std::uint32_t>(cpp_box::system::Memory_Map::USER_RAM_START)].disassembly.c_str());
         }
       }
 
@@ -585,7 +609,8 @@ int main(const int argc, const char *argv[])
     return EXIT_SUCCESS;
   }
 
-  const auto clang_compiler = cpp_box::find_clang(user_provided_clang, R"(C:\Program Files\LLVM\bin\clang++)", "/usr/local/bin/clang++", "/usr/bin/clang++");
+  const auto clang_compiler =
+    cpp_box::find_clang(user_provided_clang, R"(C:\Program Files\LLVM\bin\clang++)", "/usr/local/bin/clang++", "/usr/bin/clang++");
 
   if (clang_compiler.empty()) {
     std::cerr << "Unable to locate a viable clang compiler\n";
