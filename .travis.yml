@@ -18,7 +18,9 @@ matrix:
 
 
 install:
-  pip install --user conan cmake
+  - pip install --user conan cmake
+  - curl -s https://report.ci/annotate.py > annotate.py
+  
 
 script:
   - $CXX_EXE --version
@@ -33,9 +35,10 @@ script:
   - cd build
   - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
   - cmake  $CMAKE_OPTS ..
-  - VERBOSE=1 cmake --build . -- -j2
+  - VERBOSE=1 cmake --build . -- -j2 | python ../annotate.py --tool gcc --name "Gcc Build" --tee
   - ctest -j2
   - if [ "${COVERAGE}" = "1" ]; then bash <(curl -s https://codecov.io/bash) -x $GCOV 2>/dev/null ; fi
 
-
-
+after_script:
+  - curl -s https://report.ci/upload.py | python
+    
