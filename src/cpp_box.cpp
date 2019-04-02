@@ -57,11 +57,11 @@ struct MMIO_Devices
   }
   [[nodiscard]] std::uint16_t read_half_word([[maybe_unused]] const std::uint32_t loc) const noexcept
   {
-    return static_cast<std::uint16_t>(generator->random_half_word(generator->generator));
+    return static_cast<std::uint16_t>(generator->random_word(generator->generator));
   }
   [[nodiscard]] std::uint8_t read_byte([[maybe_unused]] const std::uint32_t loc) const noexcept
   {
-    return static_cast<std::uint8_t>(generator->random_byte(generator->generator));
+    return static_cast<std::uint8_t>(generator->random_word(generator->generator));
   }
 };
 
