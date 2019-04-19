@@ -182,13 +182,13 @@ enable_testing()
 add_executable(constexpr_tests test/constexpr_tests.cpp)
 target_link_libraries(constexpr_tests
                       PRIVATE project_options project_warnings catch2::catch2)
-catch_discover_tests(constexpr_tests TEST_PREFIX "constexpr.")
+catch_discover_tests(constexpr_tests TEST_PREFIX "constexpr." EXTRA_ARGS -s --reporter=xml --out=constexpr.xml)
 
 add_executable(relaxed_constexpr_tests test/constexpr_tests.cpp)
 target_link_libraries(relaxed_constexpr_tests
                       PRIVATE project_options project_warnings catch2::catch2)
 target_compile_definitions(relaxed_constexpr_tests PRIVATE RELAXED_CONSTEXPR=1)
-catch_discover_tests(relaxed_constexpr_tests TEST_PREFIX "relaxed_constexpr.")
+catch_discover_tests(relaxed_constexpr_tests TEST_PREFIX "relaxed_constexpr."  EXTRA_ARGS -s --reporter=xml --out=relaxed_constexpr.xml)
 
 if(NOT ONLY_COVERAGE)
   add_library(utility lib/utility.cpp)
