@@ -80,6 +80,7 @@ struct Box
   struct Status
   {
     enum class States { Static, Running, Begin_Build, Paused, Parse_Build_Results, Reset, Reset_Timer, Start, Step_One, Check_Goal };
+    enum class Languages : int { Cpp, Assembly };
 
     spdlog::logger &m_logger;
 
@@ -91,6 +92,8 @@ struct Box
     sf::Clock framerateClock;
     std::array<std::uint32_t, 16> last_registers{};
     std::uint32_t last_CSPR{};
+
+    Languages language { Languages::Cpp };
 
     // TODO: move somewhere shared
     struct Timer
@@ -385,12 +388,18 @@ struct Box
     ImGui::End();
 
 
-    ImGui::Begin("C++");
+    ImGui::Begin("Editor");
     {
       if (status.loaded_files.src.size() - strlen(status.loaded_files.src.c_str()) < 256) {
         status.loaded_files.src.resize(status.loaded_files.src.size() + 512);
       }
+
+      ImGui::RadioButton("C++", reinterpret_cast<int*>(&status.language), static_cast<int>(Status::Languages::Cpp));
+      ImGui::SameLine();
+      ImGui::RadioButton("Assembly", reinterpret_cast<int*>(&status.language), static_cast<int>(Status::Languages::Assembly));
+      ImGui::SameLine();
       ImGui::Checkbox("Show Assembly", &status.show_assembly);
+
       const auto available = ImGui::GetContentRegionAvail();
       ImGui::BeginChild("Code", { status.show_assembly ? (available.x * 5 / 8) : available.x, available.y });
       {
