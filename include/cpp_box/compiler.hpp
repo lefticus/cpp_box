@@ -61,6 +61,7 @@ Loaded_Files compile(const std::string &t_str,
                      const std::filesystem::path &t_hardware_lib,
                      const std::string_view t_optimization_level,
                      const std::string_view t_standard,
-                     spdlog::logger &logger);
+                     spdlog::logger &logger,
+                     bool is_cpp_mode = true);
 
 }  // namespace cpp_box

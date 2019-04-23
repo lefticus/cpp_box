@@ -79,8 +79,11 @@ Loaded_Files compile(const std::string &t_str,
                      const std::filesystem::path &t_hardware_lib,
                      const std::string_view t_optimization_level,
                      const std::string_view t_standard,
-                     spdlog::logger &logger)
+                     spdlog::logger &logger,
+                     bool is_cpp_mode)
 {
+  is_cpp_mode = false; // TODO
+
   logger.info("Compile Starting");
 
   cpp_box::utility::Temp_Directory dir{};
@@ -91,21 +94,39 @@ Loaded_Files compile(const std::string &t_str,
   const auto obj_file         = dir.dir() / "src.o";
   const auto disassembly_file = dir.dir() / "src.dis";
 
-  if (std::ofstream ofs(cpp_file); ofs.good()) {
+  if (std::ofstream ofs(is_cpp_mode ? cpp_file : asm_file); ofs.good()) {
     ofs.write(t_str.data(), static_cast<std::streamsize>(t_str.size()));
     ofs.flush();  // make sure OS flushes file before clang tries to load it
   }
 
-  const auto build_command = fmt::format(
-    R"("{}" -std={} "{}" -c -o "{}" -O{} -g -save-temps=obj --target=arm-none-elf -march=armv4 -mfpu=vfp -mfloat-abi=hard -nostdinc -I"{}" -I"{}" -I"{}" -D__ELF__ -D_LIBCPP_HAS_NO_THREADS)",
-    t_clang_compiler.string(),
-    std::string(t_standard),
-    cpp_file.string(),
-    obj_file.string(),
-    std::string(t_optimization_level),
-    (t_freestanding_stdlib / "include").string(),
-    (t_freestanding_stdlib / "freestanding" / "include").string(),
-    t_hardware_lib.string());
+  // TODO "-save-temps=obj"
+  const std::string_view common_flags = "-g --target=arm-none-elf -march=armv4 -mfpu=vfp -mfloat-abi=hard";
+
+  std::string build_command;
+  if(is_cpp_mode) {
+    build_command = fmt::format(
+      R"("{}" -std={} "{}" -c -o "{}" -O{} -nostdinc -I"{}" -I"{}" -I"{}" -D__ELF__ -D_LIBCPP_HAS_NO_THREADS {})",
+      t_clang_compiler.string(),
+      std::string(t_standard),
+      cpp_file.string(),
+      obj_file.string(),
+      std::string(t_optimization_level),
+      (t_freestanding_stdlib / "include").string(),
+      (t_freestanding_stdlib / "freestanding" / "include").string(),
+      t_hardware_lib.string(),
+      common_flags
+      );
+  } else {
+    // TODO construct the command in a controlled environment
+    build_command = fmt::format(
+      R"("{}" "{}" -o "{}" -O{} {})",
+      "/usr/bin/clang",// t_clang_compiler.string(), // TODO
+      asm_file.string(),
+      obj_file.string(),
+      std::string(t_optimization_level),
+      common_flags
+      );
+  }
 
   logger.debug("Executing compile command: '{}'", build_command);
   [[maybe_unused]] const auto [result, output, error] = cpp_box::utility::make_system_call(build_command);
