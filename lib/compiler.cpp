@@ -100,12 +100,12 @@ Loaded_Files compile(const std::string &t_str,
   }
 
   // TODO "-save-temps=obj"
-  const std::string_view common_flags = "-g --target=arm-none-elf -march=armv4 -mfpu=vfp -mfloat-abi=hard";
+  const std::string_view common_flags = "-g --target=arm-none-elf -march=armv4 -mfloat-abi=hard";
 
   std::string build_command;
   if(is_cpp_mode) {
     build_command = fmt::format(
-      R"("{}" -std={} "{}" -c -o "{}" -O{} -nostdinc -I"{}" -I"{}" -I"{}" -D__ELF__ -D_LIBCPP_HAS_NO_THREADS {})",
+      R"("{}" -std={} "{}" -c -o "{}" -O{} -nostdinc -I"{}" -I"{}" -I"{}" -D__ELF__ -D_LIBCPP_HAS_NO_THREADS {} -mfpu=vfp)",
       t_clang_compiler.string(),
       std::string(t_standard),
       cpp_file.string(),
@@ -117,10 +117,9 @@ Loaded_Files compile(const std::string &t_str,
       common_flags
       );
   } else {
-    // TODO construct the command in a controlled environment
     build_command = fmt::format(
-      R"("{}" "{}" -o "{}" -O{} {})",
-      "/usr/bin/clang",// t_clang_compiler.string(), // TODO
+      R"("{}" "{}" -c -o "{}" -O{} {})",
+      t_clang_compiler.string(),
       asm_file.string(),
       obj_file.string(),
       std::string(t_optimization_level),
