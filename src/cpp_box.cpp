@@ -525,9 +525,12 @@ struct Box
            src                 = status.loaded_files.src,
            clang_compiler      = this->clang_compiler,
            freestanding_stdlib = this->freestanding_stdlib,
-           hardware_lib        = this->hardware_lib]() {
+           hardware_lib        = this->hardware_lib,
+           language            = status.language]() {
+            const bool is_cpp_mode = language == Status::Languages::Cpp;
+
             // string is oversized to allow for a buffer for IMGUI, need to only compile the first part of it
-            return cpp_box::compile(src.substr(0, src.find('\0')), clang_compiler, freestanding_stdlib, hardware_lib, "3", "c++2a", *console);
+            return cpp_box::compile(src.substr(0, src.find('\0')), clang_compiler, freestanding_stdlib, hardware_lib, "3", "c++2a", *console, is_cpp_mode);
           });
         status.needs_build = false;
         break;
