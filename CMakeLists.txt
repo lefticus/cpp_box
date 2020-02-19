@@ -113,7 +113,7 @@ if(NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
       "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")
   file(
     DOWNLOAD
-      "https://raw.githubusercontent.com/conan-io/cmake-conan/v0.12/conan.cmake"
+      "https://raw.githubusercontent.com/conan-io/cmake-conan/v0.14/conan.cmake"
       "${CMAKE_BINARY_DIR}/conan.cmake")
 endif()
 
