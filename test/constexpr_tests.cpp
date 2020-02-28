@@ -318,4 +318,50 @@ TEST_CASE("Test arbitrary code")
   REQUIRE(TEST(thing.read_byte(1001) == 12));  // NOLINT This suppresses an initialization warning from catch2
 }
 
+/*
+ * Only load/store (LDR and STR) instructions can access memory
+ * Offset form:
+ *    Immediate value
+ * 		Register
+ * 		Scaled register
+ */
+TEST_CASE("Test memory instructions - Immediate value")
+{
+  CONSTEXPR auto system = run_instruction(cpp_box::arm::Instruction{ 0xe59f000c }  // ldr  r0, [pc, #12]
+                                          // cpp_box::arm::Instruction{ 0xe59f1016 },  // ldr  r1, [pc, #12]
+                                          // cpp_box::arm::Instruction{ 0xe5902000 },  // ldr  r2, [r0]
+                                          // cpp_box::arm::Instruction{ 0xe5812002 },  // str r2, [r1, #2]  address mode: offset. Store
+                                          // cpp_box::arm::Instruction{ 0xe5a12004 },  // str r2, [r1, #4]! address mode: pre-indexed.
+                                          // TODO instruction not supported
+                                          // cpp_box::arm::Instruction{ 0xe4913004 },  // ldr r3, [r1], #4  address mode: post-indexed.
+                                          // TODO instruction not supported
+                                          // cpp_box::arm::Instruction{ 0xe5812000 }  // str  r2, [r1]
+  );
+
+  REQUIRE(TEST(system.registers[0] == (system.PC() + 12)));
+ // REQUIRE(TEST(system.registers[1] == 0x18));
+  // TODO REQUIRE(TEST(system.registers[2] == [[16]+2]));
+}
+/*
+TEST_CASE("Test memory instructions - Register")
+{
+  CONSTEXPR auto systest =
+    run_instruction(cpp_box::arm::Instruction{ 0xe7812002 }  // str r2, [r1, r2]  address mode: offset
+                                                             // cpp_box::arm::Instruction{ 0x },  // str r2, [ r1, r2 ]! address mode: pre-indexed.
+                                                             // TODO instruction not supported
+                                                             // cpp_box::arm::Instruction{ 0xe },  // ldr r3, [r1], r2  address mode: post-indexed.
+                                                             // TODO instruction not supported
+    );
+
+  // TODO  REQUIRE(TEST());
+}
+
+TEST_CASE("Test memory instructions - Scaled register")
+{
+  CONSTEXPR auto systest = run_instruction(cpp_box::arm::Instruction{ 0xe7913102 }  // ldr   r3, [r1, r2, LSL#2]  address mode: offset
+  );
+
+  // TODO  REQUIRE(TEST());
+}
+*/
 #endif
