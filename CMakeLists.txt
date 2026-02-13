@@ -7,7 +7,7 @@ if(CCACHE)
 endif()
 
 #
-# Set compiler flags before running conan
+# Set compiler flags
 #
 
 # Link this 'library' to use the standard warnings
@@ -104,48 +104,64 @@ else()
 endif()
 
 #
-# Load Conan
+# CPM - CMake Package Manager
 #
 
-if(NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
-  message(
-    STATUS
-      "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")
-  file(
-    DOWNLOAD
-      "https://raw.githubusercontent.com/conan-io/cmake-conan/v0.12/conan.cmake"
-      "${CMAKE_BINARY_DIR}/conan.cmake")
+set(CPM_DOWNLOAD_VERSION 0.40.2)
+file(DOWNLOAD
+  "https://github.com/cpm-cmake/CPM.cmake/releases/download/v${CPM_DOWNLOAD_VERSION}/CPM.cmake"
+  "${CMAKE_BINARY_DIR}/cmake/CPM.cmake")
+include(${CMAKE_BINARY_DIR}/cmake/CPM.cmake)
+
+CPMAddPackage("gh:fmtlib/fmt#10.2.1")
+
+CPMAddPackage(
+  NAME spdlog
+  VERSION 1.14.1
+  GITHUB_REPOSITORY gabime/spdlog
+  OPTIONS "SPDLOG_FMT_EXTERNAL ON"
+)
+
+CPMAddPackage(
+  NAME rang
+  GITHUB_REPOSITORY agauniyal/rang
+  GIT_TAG v3.1.0
+  DOWNLOAD_ONLY YES
+)
+if(rang_ADDED)
+  add_library(rang::rang INTERFACE IMPORTED)
+  target_include_directories(rang::rang INTERFACE ${rang_SOURCE_DIR}/include)
+endif()
+CPMAddPackage(
+  NAME Clara
+  GITHUB_REPOSITORY catchorg/Clara
+  GIT_TAG v1.1.5
+  DOWNLOAD_ONLY YES
+)
+if(Clara_ADDED)
+  add_library(clara::clara INTERFACE IMPORTED)
+  target_include_directories(clara::clara INTERFACE ${Clara_SOURCE_DIR}/include)
 endif()
 
-include(${CMAKE_BINARY_DIR}/conan.cmake)
+CPMAddPackage(
+  NAME Catch2
+  VERSION 3.7.1
+  GITHUB_REPOSITORY catchorg/Catch2
+)
+list(APPEND CMAKE_MODULE_PATH ${Catch2_SOURCE_DIR}/extras)
+include(Catch)
 
-conan_add_remote(NAME bincrafters
-            URL https://api.bintray.com/conan/bincrafters/public-conan)
+CPMAddPackage(
+  NAME SFML
+  VERSION 2.6.2
+  GITHUB_REPOSITORY SFML/SFML
+  GIT_TAG 2.6.2
+  OPTIONS
+    "SFML_BUILD_AUDIO OFF"
+    "SFML_BUILD_NETWORK OFF"
+)
 
-conan_check(REQUIRED)
-conan_cmake_run(CONANFILE
-                conanfile.txt
-                BASIC_SETUP
-                CONAN_COMMAND
-                ${CONAN_CMD}
-                CMAKE_TARGETS
-                BUILD
-                missing)
-
-set(CMAKE_MODULE_PATH /usr/share/SFML/cmake/Modules ${CMAKE_BINARY_DIR})
-
-if(CONAN_CATCH2_ROOT_DEBUG)
-  include(${CONAN_CATCH2_ROOT_DEBUG}/lib/cmake/Catch2/Catch.cmake)
-else()
-  include(${CONAN_CATCH2_ROOT}/lib/cmake/Catch2/Catch.cmake)
-endif()
-
-find_package(fmt)
-find_package(rang)
-find_package(libpng)
-find_package(clara)
-find_package(catch2)
-find_package(spdlog)
+find_package(PNG REQUIRED)
 
 #
 # Options
@@ -185,12 +201,12 @@ enable_testing()
 
 add_executable(constexpr_tests test/constexpr_tests.cpp)
 target_link_libraries(constexpr_tests
-                      PRIVATE project_options project_warnings catch2::catch2)
+                      PRIVATE project_options project_warnings Catch2::Catch2WithMain)
 catch_discover_tests(constexpr_tests TEST_PREFIX "constexpr." EXTRA_ARGS -s --reporter=xml --out=constexpr.xml)
 
 add_executable(relaxed_constexpr_tests test/constexpr_tests.cpp)
 target_link_libraries(relaxed_constexpr_tests
-                      PRIVATE project_options project_warnings catch2::catch2)
+                      PRIVATE project_options project_warnings Catch2::Catch2WithMain)
 target_compile_definitions(relaxed_constexpr_tests PRIVATE RELAXED_CONSTEXPR=1)
 catch_discover_tests(relaxed_constexpr_tests TEST_PREFIX "relaxed_constexpr."  EXTRA_ARGS -s --reporter=xml --out=relaxed_constexpr.xml)
 
@@ -257,7 +273,7 @@ if(NOT ONLY_COVERAGE)
                                 imgui
                                 Threads::Threads
                                 fmt::fmt
-                                libpng::libpng
+                                PNG::PNG
                                 clara::clara)
   target_include_directories(cpp_box SYSTEM PRIVATE external)
 endif()

@@ -14,13 +14,14 @@ matrix:
             - libx11-dev
             - libxrandr-dev
             - libudev-dev
+            - libpng-dev
             - g++-7
 
 
 install:
-  - pip install --user conan cmake
+  - pip install --user cmake
   - curl -s https://report.ci/annotate.py > annotate.py
-  
+
 
 script:
   - $CXX_EXE --version
@@ -33,7 +34,6 @@ script:
   - $CXX --version
   - mkdir build
   - cd build
-  - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
   - cmake  $CMAKE_OPTS ..
   - VERBOSE=1 cmake --build . -- -j2 | python ../annotate.py --tool gcc --name "Gcc Build" --tee
   - ctest -j2
@@ -41,4 +41,3 @@ script:
 
 after_script:
   - curl -s https://report.ci/upload.py | python
-    

@@ -1,19 +1,17 @@
 task:
   name: gcc8-Release-FullBuild
   container:
-    image: conanio/gcc8
+    image: gcc:8
   build_script:
-  - sudo apt-get update
-  - sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git
+  - apt-get update
+  - apt-get install --assume-yes cmake libbz2-dev libpng-dev libfreetype6-dev libz-dev git libx11-dev libxrandr-dev libudev-dev libgl1-mesa-dev
   - pwd
-  - gcc-8 --version
+  - g++ --version
   - cmake --version
-  - conan --version
-  - export CXX=`which g++-8`
-  - export CC=`which gcc-8`
+  - export CXX=`which g++`
+  - export CC=`which gcc`
   - mkdir build
   - cd build
-  - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
   - cmake -D CMAKE_BUILD_TYPE:STRING=Release ..
   - VERBOSE=1 cmake --build . -- -j2
   test_script:
@@ -24,19 +22,17 @@ task:
 task:
   name: gcc8-Debug-FullBuild
   container:
-    image: conanio/gcc8
+    image: gcc:8
   build_script:
-  - sudo apt-get update
-  - sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git
+  - apt-get update
+  - apt-get install --assume-yes cmake libbz2-dev libpng-dev libfreetype6-dev libz-dev git libx11-dev libxrandr-dev libudev-dev libgl1-mesa-dev
   - pwd
-  - gcc-8 --version
+  - g++ --version
   - cmake --version
-  - conan --version
-  - export CXX=`which g++-8`
-  - export CC=`which gcc-8`
+  - export CXX=`which g++`
+  - export CC=`which gcc`
   - mkdir build
   - cd build
-  - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
   - cmake -D CMAKE_BUILD_TYPE:STRING=Debug ..
   - VERBOSE=1 cmake --build . -- -j2
   test_script:
@@ -48,19 +44,17 @@ task:
 task:
   name: clang7-Release-FullBuild-libstdc++
   container:
-    image: conanio/clang7
+    image: silkeh/clang:7
   build_script:
-  - sudo apt-get update
-  - sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git
+  - apt-get update
+  - apt-get install --assume-yes cmake libbz2-dev libpng-dev libfreetype6-dev libz-dev git libx11-dev libxrandr-dev libudev-dev libgl1-mesa-dev
   - pwd
   - clang++ --version
   - cmake --version
-  - conan --version
   - export CXX=`which clang++`
   - export CC=`which clang`
   - mkdir build
   - cd build
-  - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
   - cmake -D CMAKE_BUILD_TYPE:STRING=Release ..
   - VERBOSE=1 cmake --build . -- -j2
   test_script:
@@ -71,19 +65,17 @@ task:
 task:
   name: clang7-Debug-FullBuild-libstdc++
   container:
-    image: conanio/clang7
+    image: silkeh/clang:7
   build_script:
-  - sudo apt-get update
-  - sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git
+  - apt-get update
+  - apt-get install --assume-yes cmake libbz2-dev libpng-dev libfreetype6-dev libz-dev git libx11-dev libxrandr-dev libudev-dev libgl1-mesa-dev
   - pwd
   - clang++ --version
   - cmake --version
-  - conan --version
   - export CXX=`which clang++`
   - export CC=`which clang`
   - mkdir build
   - cd build
-  - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
   - cmake -D CMAKE_BUILD_TYPE:STRING=Debug ..
   - VERBOSE=1 cmake --build . -- -j2
   test_script:
@@ -94,25 +86,21 @@ task:
 task:
   name: clang7-Debug-ClangTidy-libstdc++
   container:
-    image: conanio/clang7
+    image: silkeh/clang:7
   build_script:
-  - sudo apt-get update
-  - sudo apt-get install --assume-yes libbz2-dev libpng-dev libfreetype6-dev libz-dev git clang-tidy-7
+  - apt-get update
+  - apt-get install --assume-yes cmake libbz2-dev libpng-dev libfreetype6-dev libz-dev git libx11-dev libxrandr-dev libudev-dev libgl1-mesa-dev clang-tidy-7
   - pwd
   - clang++ --version
   - ls /usr/bin/clang*
   - cmake --version
-  - conan --version
   - export CXX=`which clang++`
   - export CC=`which clang`
   - mkdir build
   - cd build
-  - conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan 
   - cmake -D CLANGTIDY:PATH=`which clang-tidy-7` -D ENABLE_CLANG_TIDY:BOOL=ON -D CMAKE_BUILD_TYPE:STRING=Debug ..
   - VERBOSE=1 cmake --build . -- -j2
   test_script:
   - pwd
   - cd build
   - ctest -j2
-
-
