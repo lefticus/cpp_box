@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
 project(TheCppBox VERSION 0.0.1 LANGUAGES CXX)
 
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 find_program(CCACHE ccache)
 if(CCACHE)
   set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE})
@@ -17,7 +19,7 @@ add_library(project_warnings INTERFACE)
 add_library(project_options INTERFACE)
 
 target_compile_features(project_options INTERFACE cxx_std_17)
-target_include_directories(project_options INTERFACE include external)
+target_include_directories(project_options INTERFACE include)
 
 if(MSVC)
   target_compile_options(project_warnings INTERFACE /W4 /WX "/permissive-")
@@ -161,6 +163,24 @@ CPMAddPackage(
     "SFML_BUILD_NETWORK OFF"
 )
 
+CPMAddPackage(
+  NAME imgui
+  GITHUB_REPOSITORY ocornut/imgui
+  GIT_TAG v1.91.5
+  DOWNLOAD_ONLY YES
+)
+
+set(IMGUI_DIR ${imgui_SOURCE_DIR})
+set(IMGUI_SFML_FIND_SFML OFF)
+CPMAddPackage(
+  NAME imgui-sfml
+  GITHUB_REPOSITORY SFML/imgui-sfml
+  GIT_TAG v2.6.1
+)
+# Mark imgui/imgui-sfml headers as SYSTEM to suppress warnings from -Werror
+get_target_property(_imgui_sfml_includes ImGui-SFML INTERFACE_INCLUDE_DIRECTORIES)
+set_target_properties(ImGui-SFML PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_imgui_sfml_includes}")
+
 find_package(PNG REQUIRED)
 
 #
@@ -253,13 +273,6 @@ if(NOT ONLY_COVERAGE)
                            INTERFACE -fsanitize=address,fuzzer)
   endif()
 
-  # imgui dependencies
-
-  set(OpenGL_GL_PREFERENCE GLVND)
-  find_package(OpenGL)
-
-  add_subdirectory(external)
-
   set(THREADS_PREFER_PTHREAD_FLAG ON)
   find_package(Threads REQUIRED)
 
@@ -270,10 +283,9 @@ if(NOT ONLY_COVERAGE)
                                 project_warnings
                                 utility
                                 compiler
-                                imgui
+                                ImGui-SFML::ImGui-SFML
                                 Threads::Threads
                                 fmt::fmt
                                 PNG::PNG
                                 clara::clara)
-  target_include_directories(cpp_box SYSTEM PRIVATE external)
 endif()

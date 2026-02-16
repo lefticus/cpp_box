@@ -18,8 +18,8 @@
 #include <string>
 #include <vector>
 
-#include "imgui/lib/imgui-SFML.h"
-#include "imgui/lib/imgui.h"
+#include <imgui-SFML.h>
+#include <imgui.h>
 
 #include <SFML/Graphics/CircleShape.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
@@ -294,8 +294,8 @@ struct Box
 
       auto scale_factor        = status.scale_factor;
       auto sprite_scale_factor = status.sprite_scale_factor;
-      ImGui::InputFloat("Zoom", &scale_factor, 0.5f, 0.0f, 1);
-      ImGui::InputFloat("Output Zoom", &sprite_scale_factor, 0.5f, 0.0f, 1);
+      ImGui::InputFloat("Zoom", &scale_factor, 0.5f, 0.0f, "%.1f");
+      ImGui::InputFloat("Output Zoom", &sprite_scale_factor, 0.5f, 0.0f, "%.1f");
       const auto elapsedSeconds = status.framerateClock.restart().asSeconds();
       text(true, "{:2.2f} FPS ~{:2.2f} Mhz", 1 / elapsedSeconds, status.opsPerFrame / elapsedSeconds / 1000000);
 
@@ -366,7 +366,7 @@ struct Box
         const auto pc              = status.sys->PC() - 4;
         const auto object_loc      = pc - static_cast<uint32_t>(cpp_box::system::Memory_Map::USER_RAM_START);
         const auto current_linenum = status.loaded_files.location_data[object_loc].line_number;
-        ImGui::BeginChild("Active Source", { ImGui::GetContentRegionAvailWidth(), 300 });
+        ImGui::BeginChild("Active Source", ImVec2(ImGui::GetContentRegionAvail().x, 300));
         std::size_t endl  = 0;
         std::size_t begin = 0;
         int linenum       = 1;
@@ -375,7 +375,7 @@ struct Box
           const auto line         = status.loaded_files.src.substr(begin, endl - begin);
           const auto current_line = linenum == current_linenum;
           text(current_line, "{:4}: {}", linenum, line);
-          if (current_line) { ImGui::SetScrollHere(); }
+          if (current_line) { ImGui::SetScrollHereY(); }
           if (endl != std::string::npos) { ++endl; }
           ++linenum;
         }
@@ -483,7 +483,7 @@ struct Box
     sf::RenderWindow window(sf::VideoMode(1024, 768), "C++ Box");
 
 
-    ImGui::SFML::Init(window);
+    static_cast<void>(ImGui::SFML::Init(window));
 
     sf::Clock deltaClock;
 
@@ -494,7 +494,7 @@ struct Box
 
       sf::Event event{};
       while (window.pollEvent(event)) {
-        ImGui::SFML::ProcessEvent(event);
+        ImGui::SFML::ProcessEvent(window, event);
 
         if (event.type == sf::Event::Closed) { window.close(); }
       }
